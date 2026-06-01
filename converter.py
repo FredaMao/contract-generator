@@ -275,8 +275,58 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
     return -1
 
 
+def replace_party_paras_in_place(xml: str, company: dict, sig_idx: int,
+                                   paragraphs: list, font: str, label_fmt: str) -> str:
+    """
+    For top-of-document signatures (補充協議書 etc.).
+    Only replace 甲方 / 乙方 paragraphs in place; leave everything else untouched.
+    """
+    c = company
+    u = USPACE
+    search_end = min(sig_idx + 25, len(paragraphs))
+    to_replace = []  # (para_abs_idx, new_text)
+
+    for abs_i in range(sig_idx, search_end):
+        text = paragraphs[abs_i][2].strip()
+        # 甲方 label paragraph (business owner → replace with company)
+        if re.match(r'^甲[　\s]*方[：:]', text) or re.match(r'^出租人[：:]', text):
+            if label_fmt == 'spaced':
+                new_text = f'甲　方：{c["name"]}　（以下簡稱甲方）'
+            else:
+                new_text = f'甲方（蓋章）：{c["name"]}'
+            to_replace.append((abs_i, new_text))
+        # 乙方 label paragraph (company → replace with 悠勢)
+        elif (re.match(r'^乙[　\s]*方[：:]', text) or re.match(r'^承租人[：:]', text)) and c['name'] in text:
+            if label_fmt == 'spaced':
+                new_text = f'乙　方：{u["name"]}　（以下簡稱乙方）'
+            else:
+                new_text = f'乙方（蓋章）：{u["name"]}'
+            to_replace.append((abs_i, new_text))
+
+    # Apply in reverse order so positions stay valid
+    for abs_i, new_text in reversed(to_replace):
+        paragraphs = list_paragraphs(xml)
+        if abs_i >= len(paragraphs):
+            continue
+        ps, pe, _ = paragraphs[abs_i]
+        ppr = get_ppr(xml[ps:pe])
+        rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', xml[ps:pe], re.DOTALL)
+        rpr = f'<w:rPr>{rpr_m.group(1)}</w:rPr>' if rpr_m else make_rpr(font)
+        new_p = (f'<w:p>{ppr}'
+                 f'<w:r>{rpr}'
+                 f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
+                 f'</w:r></w:p>')
+        xml = xml[:ps] + new_p + xml[pe:]
+
+    return xml
+
+
 def replace_signature_section(xml: str, company: dict, font: str = '思源黑體') -> str:
-    """Find signature section start and replace everything from there to body end."""
+    """
+    Find signature section and update party info.
+    - Top-of-doc signatures (補充協議書): only replace the party paragraphs in place.
+    - Bottom-of-doc signatures (standard lease): replace from sig_start to body end.
+    """
     paragraphs = list_paragraphs(xml)
     company_name = company['name']
 
@@ -284,6 +334,14 @@ def replace_signature_section(xml: str, company: dict, font: str = '思源黑體
     if sig_idx == -1:
         return xml
 
+    label_fmt = detect_sig_label_format(xml, sig_idx, paragraphs)
+    n = len(paragraphs)
+
+    # Signature at top of document → in-place party replacement only
+    if sig_idx < n * 0.20:
+        return replace_party_paras_in_place(xml, company, sig_idx, paragraphs, font, label_fmt)
+
+    # Signature at bottom → replace everything from sig_start to body end
     sig_start = paragraphs[sig_idx][0]
     body_end_tag = '</w:body>'
     body_end = xml.find(body_end_tag)
@@ -297,13 +355,10 @@ def replace_signature_section(xml: str, company: dict, font: str = '思源黑體
     if open_tbls > close_tbls:
         return xml
 
-    # Detect label format and signature section title from original
-    label_fmt = detect_sig_label_format(xml, sig_idx, paragraphs)
     sig_title_text = paragraphs[sig_idx][2].strip() or '立契約書人'
     new_sig = build_signature_section(company, font=font, label_fmt=label_fmt,
                                        sig_title=sig_title_text)
 
-    # Preserve <w:sectPr> (page layout)
     sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
     if sect_match:
         sect_rel = sect_match[-1].start()
