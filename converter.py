@@ -172,71 +172,141 @@ def build_signature_section(company: dict) -> str:
     return ''.join(parts)
 
 
-def replace_signature_section(xml: str, company: dict) -> str:
-    """Find 立契約書人 paragraph and replace everything after it."""
-    paragraphs = list_paragraphs(xml)
+def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
+    """
+    Find the paragraph index where the signature section starts.
+    Tries multiple strategies to handle different contract formats.
+    Returns -1 if not found.
+    """
+    n = len(paragraphs)
 
-    sig_para_idx = None
-    for i, (start, end, text) in enumerate(paragraphs):
+    # Strategy 1: "立契約書人" (standard lease contracts)
+    for i, (_, _, text) in enumerate(paragraphs):
         if '立契約書人' in text:
-            sig_para_idx = i
+            return i
+
+    # Strategy 2: "(簽名頁如後)" → next section is signature page
+    for i, (_, _, text) in enumerate(paragraphs):
+        if '簽名頁如後' in text:
+            # Return next non-empty paragraph
+            for j in range(i + 1, n):
+                if paragraphs[j][2].strip():
+                    return j
+            return i + 1
+
+    # Strategy 3: Company name in last 40% of document → scan back for party block start
+    start_from = n * 6 // 10
+    company_idx = None
+    for i in range(start_from, n):
+        if company_name in paragraphs[i][2]:
+            company_idx = i
             break
 
-    if sig_para_idx is None:
-        return xml  # Can't find signature section, return unchanged
+    if company_idx is not None:
+        # Scan backwards to find the start of the party block
+        # Look for a 甲方 label or "下稱" which signals start of party section
+        for j in range(company_idx, max(company_idx - 20, start_from - 3) - 1, -1):
+            text = paragraphs[j][2].strip()
+            if any(kw in text for kw in ['甲方', '出租人', '下稱「甲方', '（甲方）']):
+                return j
+        # If no label found, go back a few paragraphs from company
+        return max(company_idx - 5, start_from)
 
-    sig_start = paragraphs[sig_para_idx][0]
+    # Strategy 4: "中　華　民　國" date line → go back to find party block
+    for i in range(n - 1, n * 5 // 10, -1):
+        text = paragraphs[i][2]
+        if '中' in text and '華' in text and '民' in text and '國' in text and '年' in text:
+            # Found date line; scan backwards for party block start
+            for j in range(i, max(i - 25, 0) - 1, -1):
+                text_j = paragraphs[j][2].strip()
+                if any(kw in text_j for kw in ['甲方', '出租人', '立契約書人']):
+                    return j
+            return max(i - 15, 0)
+
+    return -1
+
+
+def replace_signature_section(xml: str, company: dict) -> str:
+    """Find signature section start and replace everything from there to body end."""
+    paragraphs = list_paragraphs(xml)
+    company_name = company['name']
+
+    sig_idx = find_sig_section_idx(paragraphs, company_name)
+    if sig_idx == -1:
+        return xml
+
+    sig_start = paragraphs[sig_idx][0]
     body_end_tag = '</w:body>'
     body_end = xml.find(body_end_tag)
     if body_end == -1:
         return xml
 
-    # Check we're not inside a table
+    # Don't cut inside a table
     content_before = xml[:sig_start]
     open_tbls = content_before.count('<w:tbl>') + len(re.findall(r'<w:tbl\s', content_before))
     close_tbls = content_before.count('</w:tbl>')
     if open_tbls > close_tbls:
-        # Signature section is inside a table — skip replacement
         return xml
 
-    # Preserve <w:sectPr> if present (page layout settings)
-    sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
     new_sig = build_signature_section(company)
 
+    # Preserve <w:sectPr> (page layout)
+    sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
     if sect_match:
-        # Use the LAST sectPr occurrence
-        sect_rel_start = sect_match[-1].start()
-        sect_abs_start = sig_start + sect_rel_start
-        sect_abs_end = xml.find('</w:sectPr>', sect_abs_start)
-        if sect_abs_end != -1:
-            sect_abs_end += 11  # len('</w:sectPr>')
+        sect_rel = sect_match[-1].start()
+        sect_abs = sig_start + sect_rel
+        sect_end = xml.find('</w:sectPr>', sect_abs)
+        if sect_end != -1:
+            sect_end += 11
             return (xml[:sig_start] + new_sig +
-                    xml[sect_abs_start:sect_abs_end] +
+                    xml[sect_abs:sect_end] +
                     body_end_tag + xml[body_end + len(body_end_tag):])
 
     return xml[:sig_start] + new_sig + body_end_tag + xml[body_end + len(body_end_tag):]
 
 
 def update_header_parties(xml: str, company_name: str) -> str:
-    """Update 出租人 / 承租人 lines in the contract header."""
+    """
+    Update party names in the contract header/preamble.
+    Tries multiple patterns to handle different contract formats.
+    """
     paragraphs = list_paragraphs(xml)
     out_idx = in_idx = None
 
-    for i, (_, _, text) in enumerate(paragraphs[:30]):
+    # Strategy 1: "出租人：...下稱甲方" / "承租人：...下稱乙方"
+    for i, (_, _, text) in enumerate(paragraphs[:35]):
         if '出租人：' in text and '下稱' in text and out_idx is None:
             out_idx = i
         if '承租人：' in text and '下稱' in text and in_idx is None:
             in_idx = i
 
+    # Strategy 2: "甲方...下稱甲方" / "乙方...下稱乙方" style (some contracts)
     if out_idx is None or in_idx is None:
-        return xml
+        for i, (_, _, text) in enumerate(paragraphs[:35]):
+            if '下稱「甲方」' in text and out_idx is None:
+                out_idx = i
+            if '下稱「乙方」' in text and in_idx is None:
+                in_idx = i
 
-    # Process later index first so earlier positions remain valid
-    order = sorted([(in_idx, f'承租人：{USPACE["name"]}', '（下稱「乙方」）'),
-                    (out_idx, f'出租人：{company_name}', '（下稱「甲方」）')],
-                   key=lambda x: x[0], reverse=True)
+    # Strategy 3: Company name + "乙方" in same paragraph within first portion
+    if in_idx is None:
+        for i, (_, _, text) in enumerate(paragraphs[:35]):
+            if company_name in text and ('乙方' in text or '承租人' in text):
+                in_idx = i
+                break
 
-    for target_idx, label_value, suffix in order:
+    if out_idx is None and in_idx is None:
+        return xml  # Nothing found in header
+
+    # Process the ones we found (later index first)
+    updates = []
+    if in_idx is not None:
+        updates.append((in_idx, f'承租人：{USPACE["name"]}', '（下稱「乙方」）'))
+    if out_idx is not None:
+        updates.append((out_idx, f'出租人：{company_name}', '（下稱「甲方」）'))
+    updates.sort(key=lambda x: x[0], reverse=True)
+
+    for target_idx, label_value, suffix in updates:
         paragraphs = list_paragraphs(xml)
         if target_idx >= len(paragraphs):
             continue
