@@ -75,10 +75,18 @@ def xml_escape(text: str) -> str:
             .replace('"', '&quot;'))
 
 
-def sig_para(text: str) -> str:
+def make_rpr(font: str) -> str:
+    return (f'<w:rPr>'
+            f'<w:rFonts w:ascii="{font}" w:eastAsia="{font}" w:hAnsi="{font}" w:cs="{font}"/>'
+            f'<w:color w:val="000000"/>'
+            f'</w:rPr>')
+
+
+def sig_para(text: str, font: str = '思源黑體') -> str:
+    rpr = make_rpr(font)
     return (
         f'<w:p>{PPR_SIG}'
-        f'<w:r>{RPR_SIG}'
+        f'<w:r>{rpr}'
         f'<w:t xml:space="preserve">{xml_escape(text)}</w:t>'
         f'</w:r></w:p>'
     )
@@ -91,6 +99,18 @@ def empty_sig_para() -> str:
 def get_plain_text(xml: str) -> str:
     text = re.sub('<[^>]+>', '', xml)
     return re.sub(r'\s+', ' ', text).strip()
+
+
+def detect_main_font(xml: str) -> str:
+    """Find the most common Chinese font in the document."""
+    import collections
+    fonts = re.findall(r'w:eastAsia="([^"]+)"', xml)
+    if not fonts:
+        return '思源黑體'
+    skip = {'Noto Sans', 'Arial', 'Times New Roman', 'Calibri', 'Tahoma'}
+    filtered = [f for f in fonts if f not in skip]
+    candidates = filtered if filtered else fonts
+    return collections.Counter(candidates).most_common(1)[0][0]
 
 
 def detect_company(plain_text: str) -> Optional[str]:
@@ -149,26 +169,54 @@ def build_header_para(ppr: str, label_value: str, suffix: str) -> str:
     )
 
 
-def build_signature_section(company: dict) -> str:
+def detect_sig_label_format(xml: str, sig_idx: int, paragraphs: list) -> str:
+    """Detect what party label style is used in the signature section."""
+    snippet = ' '.join(p[2] for p in paragraphs[sig_idx:min(sig_idx + 15, len(paragraphs))])
+    if '甲方（蓋章）' in snippet or '乙方（蓋章）' in snippet:
+        return 'stamp'
+    if re.search(r'甲\s*方[：:]', snippet) and re.search(r'乙\s*方[：:]', snippet):
+        return 'spaced'
+    if '甲方名稱' in snippet or '乙方名稱' in snippet:
+        return 'name'
+    return 'stamp'
+
+
+def build_signature_section(company: dict, font: str = '思源黑體',
+                             label_fmt: str = 'stamp', sig_title: str = '立契約書人') -> str:
     c = company
     u = USPACE
-    parts = [
-        sig_para('立契約書人'),
-        empty_sig_para(),
-        sig_para(f'甲方（蓋章）：{c["name"]}'),
-        sig_para(f'負責人/出租人： {c["person"]}'),
-        sig_para(f'身分證字號/統編：{c["id"]}'),
-        sig_para(f'{c["contact_label"]}：{c["contact"]}'),
-        sig_para(f'地址：{c["address"]}'),
-        empty_sig_para(),
-        sig_para(f'乙方（蓋章）：{u["name"]}'),
-        sig_para(f'負責人/承租人： {u["person"]}'),
-        sig_para(f'身分證字號/統編：{u["id"]}'),
-        sig_para(f'{u["contact_label"]}：{u["contact"]}'),
-        sig_para(f'地址：{u["address"]}'),
-        empty_sig_para(),
-        sig_para('中　華　民　國　　　年　　月　　日'),
-    ]
+
+    if label_fmt == 'spaced':
+        jia = f'甲　方：{c["name"]}　（以下簡稱甲方）'
+        yi  = f'乙　方：{u["name"]}　（以下簡稱乙方）'
+        parts = [
+            sig_para(sig_title, font),
+            empty_sig_para(),
+            sig_para(jia, font),
+            sig_para(yi, font),
+            empty_sig_para(),
+            sig_para('中　華　民　國　　　年　　月　　日', font),
+        ]
+    else:  # stamp / name / default
+        jia_label = '甲方名稱：' if label_fmt == 'name' else '甲方（蓋章）：'
+        yi_label  = '乙方名稱：' if label_fmt == 'name' else '乙方（蓋章）：'
+        parts = [
+            sig_para(sig_title, font),
+            empty_sig_para(),
+            sig_para(f'{jia_label}{c["name"]}', font),
+            sig_para(f'負責人/出租人： {c["person"]}', font),
+            sig_para(f'身分證字號/統編：{c["id"]}', font),
+            sig_para(f'{c["contact_label"]}：{c["contact"]}', font),
+            sig_para(f'地址：{c["address"]}', font),
+            empty_sig_para(),
+            sig_para(f'{yi_label}{u["name"]}', font),
+            sig_para(f'負責人/承租人： {u["person"]}', font),
+            sig_para(f'身分證字號/統編：{u["id"]}', font),
+            sig_para(f'{u["contact_label"]}：{u["contact"]}', font),
+            sig_para(f'地址：{u["address"]}', font),
+            empty_sig_para(),
+            sig_para('中　華　民　國　　　年　　月　　日', font),
+        ]
     return ''.join(parts)
 
 
@@ -180,9 +228,10 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
     """
     n = len(paragraphs)
 
-    # Strategy 1: "立契約書人" (standard lease contracts)
+    # Strategy 1: "立契約書人" / "立補充協議書人" / "立協議書人" etc.
+    SIG_MARKERS = ('立契約書人', '立補充協議書人', '立協議書人', '立合約書人', '立租賃契約書人')
     for i, (_, _, text) in enumerate(paragraphs):
-        if '立契約書人' in text:
+        if any(m in text for m in SIG_MARKERS):
             return i
 
     # Strategy 2: "(簽名頁如後)" → next section is signature page
@@ -226,7 +275,7 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
     return -1
 
 
-def replace_signature_section(xml: str, company: dict) -> str:
+def replace_signature_section(xml: str, company: dict, font: str = '思源黑體') -> str:
     """Find signature section start and replace everything from there to body end."""
     paragraphs = list_paragraphs(xml)
     company_name = company['name']
@@ -248,7 +297,11 @@ def replace_signature_section(xml: str, company: dict) -> str:
     if open_tbls > close_tbls:
         return xml
 
-    new_sig = build_signature_section(company)
+    # Detect label format and signature section title from original
+    label_fmt = detect_sig_label_format(xml, sig_idx, paragraphs)
+    sig_title_text = paragraphs[sig_idx][2].strip() or '立契約書人'
+    new_sig = build_signature_section(company, font=font, label_fmt=label_fmt,
+                                       sig_title=sig_title_text)
 
     # Preserve <w:sectPr> (page layout)
     sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
@@ -288,10 +341,10 @@ def update_header_parties(xml: str, company_name: str) -> str:
             if '下稱「乙方」' in text and in_idx is None:
                 in_idx = i
 
-    # Strategy 3: Company name + "乙方" in same paragraph within first portion
+    # Strategy 3: Company name + 乙方 LABEL (not just mentioned in suffix like "以下簡稱乙方")
     if in_idx is None:
         for i, (_, _, text) in enumerate(paragraphs[:35]):
-            if company_name in text and ('乙方' in text or '承租人' in text):
+            if company_name in text and re.search(r'乙[　\s]*方[：:]|承租人[：:]', text):
                 in_idx = i
                 break
 
@@ -435,9 +488,10 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
 
     company = COMPANIES[company_name]
 
+    font = detect_main_font(xml)
     xml = update_header_parties(xml, company_name)
     xml = fill_bank_account(xml, company)
-    xml = replace_signature_section(xml, company)
+    xml = replace_signature_section(xml, company, font=font)
 
     validate_xml(xml)
 
