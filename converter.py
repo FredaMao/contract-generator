@@ -303,29 +303,39 @@ def fill_bank_account(xml: str, company: dict) -> str:
         return xml[:tbl_start] + new_tbl + xml[tbl_end:]
 
     # --- 分潤版：段落格式 ---
-    # Labels map to values
+    # Replace the ENTIRE paragraph so any pre-filled 業主 value is removed.
+    # Use list_paragraphs to get exact <w:p> boundaries (avoids hitting <w:pPr>).
     label_value_map = [
-        ('銀行名稱（含分行）', company['bank']),
-        ('帳戶名稱：',         company['account_name']),
-        ('帳戶號碼：',         company['account_no']),
+        ('銀行名稱（含分行）', '銀行名稱（含分行）：', company['bank']),
+        ('帳戶名稱：',         '帳戶名稱：',           company['account_name']),
+        ('帳戶號碼：',         '帳戶號碼：',           company['account_no']),
     ]
     search_from = marker
-    for label, value in label_value_map:
-        idx = xml.find(label, search_from)
-        if idx == -1:
+    for search_key, label_text, value in label_value_map:
+        # Find the paragraph containing this label using list_paragraphs
+        paragraphs = list_paragraphs(xml)
+        target = None
+        for ps, pe, text in paragraphs:
+            if search_key in text and ps >= search_from:
+                target = (ps, pe, xml[ps:pe])
+                break
+        if target is None:
             continue
-        # Find the <w:t> tag that contains this label
-        t_open = xml.rfind('<w:t', 0, idx)
-        t_close = xml.find('</w:t>', t_open) + 6
-        if t_open == -1 or t_close == 5:
-            continue
-        # Reconstruct: keep original label text, append value
-        t_content = xml[t_open:t_close]
-        inner = re.sub(r'^<w:t[^>]*>', '', t_content)
-        inner = inner.replace('</w:t>', '').rstrip()
-        new_t = f'<w:t xml:space="preserve">{xml_escape(inner)}{xml_escape(value)}</w:t>'
-        xml = xml[:t_open] + new_t + xml[t_close:]
-        search_from = t_open + len(new_t)
+        p_start, p_end, p_xml = target
+        ppr = get_ppr(p_xml)
+        # Get run properties from the first <w:r> in the paragraph
+        rpr_match = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', p_xml, re.DOTALL)
+        if rpr_match:
+            rpr = f'<w:rPr>{rpr_match.group(1)}</w:rPr>'
+        else:
+            rpr = RPR_SIG
+        # Build clean paragraph: label run + value run (old values discarded)
+        new_p = (f'<w:p>{ppr}'
+                 f'<w:r>{rpr}<w:t xml:space="preserve">{xml_escape(label_text)}</w:t></w:r>'
+                 f'<w:r>{rpr}<w:t xml:space="preserve">{xml_escape(value)}</w:t></w:r>'
+                 f'</w:p>')
+        xml = xml[:p_start] + new_p + xml[p_end:]
+        search_from = p_start + len(new_p)
 
     return xml
 
