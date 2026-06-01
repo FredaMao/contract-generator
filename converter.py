@@ -1,6 +1,7 @@
 import zipfile
 import re
 import io
+import xml.etree.ElementTree as ET
 from typing import Optional
 
 COMPANIES = {
@@ -57,8 +58,21 @@ RPR_SIG = (
 )
 
 
+def xml_escape(text: str) -> str:
+    return (text
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('"', '&quot;'))
+
+
 def sig_para(text: str) -> str:
-    return f'<w:p>{PPR_SIG}<w:r>{RPR_SIG}<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+    return (
+        f'<w:p>{PPR_SIG}'
+        f'<w:r>{RPR_SIG}'
+        f'<w:t xml:space="preserve">{xml_escape(text)}</w:t>'
+        f'</w:r></w:p>'
+    )
 
 
 def empty_sig_para() -> str:
@@ -78,12 +92,14 @@ def detect_company(plain_text: str) -> Optional[str]:
 
 
 def list_paragraphs(xml: str) -> list:
+    """Return list of (start, end, plain_text) for all top-level paragraphs."""
     result = []
     pos = 0
     while True:
         start = xml.find('<w:p', pos)
         if start == -1:
             break
+        # Only match <w:p> or <w:p ...>, not <w:pPr>, <w:pStyle>, etc.
         if len(xml) > start + 4 and xml[start + 4] not in (' ', '>'):
             pos = start + 4
             continue
@@ -100,11 +116,13 @@ def list_paragraphs(xml: str) -> list:
 
 
 def get_ppr(para_xml: str) -> str:
+    """Extract <w:pPr>...</w:pPr> from a paragraph, or return default."""
     for tag in ('<w:pPr>', '<w:pPr '):
         start = para_xml.find(tag)
         if start != -1:
-            end = para_xml.find('</w:pPr>') + 8
-            return para_xml[start:end]
+            end = para_xml.find('</w:pPr>')
+            if end != -1:
+                return para_xml[start:end + 8]
     return PPR_SIG
 
 
@@ -112,8 +130,12 @@ def build_header_para(ppr: str, label_value: str, suffix: str) -> str:
     spaces = '                                         '
     return (
         f'<w:p>{ppr}'
-        f'<w:r>{RPR_SIG}<w:t xml:space="preserve">{label_value}</w:t></w:r>'
-        f'<w:r>{RPR_SIG}<w:t xml:space="preserve">{spaces}{suffix}</w:t></w:r>'
+        f'<w:r>{RPR_SIG}'
+        f'<w:t xml:space="preserve">{xml_escape(label_value)}</w:t>'
+        f'</w:r>'
+        f'<w:r>{RPR_SIG}'
+        f'<w:t xml:space="preserve">{spaces}{xml_escape(suffix)}</w:t>'
+        f'</w:r>'
         f'</w:p>'
     )
 
@@ -141,6 +163,91 @@ def build_signature_section(company: dict) -> str:
     return ''.join(parts)
 
 
+def replace_signature_section(xml: str, company: dict) -> str:
+    """Find 立契約書人 paragraph and replace everything after it."""
+    paragraphs = list_paragraphs(xml)
+
+    sig_para_idx = None
+    for i, (start, end, text) in enumerate(paragraphs):
+        if '立契約書人' in text:
+            sig_para_idx = i
+            break
+
+    if sig_para_idx is None:
+        return xml  # Can't find signature section, return unchanged
+
+    sig_start = paragraphs[sig_para_idx][0]
+    body_end_tag = '</w:body>'
+    body_end = xml.find(body_end_tag)
+    if body_end == -1:
+        return xml
+
+    # Check we're not inside a table
+    content_before = xml[:sig_start]
+    open_tbls = content_before.count('<w:tbl>') + len(re.findall(r'<w:tbl\s', content_before))
+    close_tbls = content_before.count('</w:tbl>')
+    if open_tbls > close_tbls:
+        # Signature section is inside a table — skip replacement
+        return xml
+
+    # Preserve <w:sectPr> if present (page layout settings)
+    sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
+    new_sig = build_signature_section(company)
+
+    if sect_match:
+        # Use the LAST sectPr occurrence
+        sect_rel_start = sect_match[-1].start()
+        sect_abs_start = sig_start + sect_rel_start
+        sect_abs_end = xml.find('</w:sectPr>', sect_abs_start)
+        if sect_abs_end != -1:
+            sect_abs_end += 11  # len('</w:sectPr>')
+            return (xml[:sig_start] + new_sig +
+                    xml[sect_abs_start:sect_abs_end] +
+                    body_end_tag + xml[body_end + len(body_end_tag):])
+
+    return xml[:sig_start] + new_sig + body_end_tag + xml[body_end + len(body_end_tag):]
+
+
+def update_header_parties(xml: str, company_name: str) -> str:
+    """Update 出租人 / 承租人 lines in the contract header."""
+    paragraphs = list_paragraphs(xml)
+    out_idx = in_idx = None
+
+    for i, (_, _, text) in enumerate(paragraphs[:30]):
+        if '出租人：' in text and '下稱' in text and out_idx is None:
+            out_idx = i
+        if '承租人：' in text and '下稱' in text and in_idx is None:
+            in_idx = i
+
+    if out_idx is None or in_idx is None:
+        return xml
+
+    # Process later index first so earlier positions remain valid
+    order = sorted([(in_idx, f'承租人：{USPACE["name"]}', '（下稱「乙方」）'),
+                    (out_idx, f'出租人：{company_name}', '（下稱「甲方」）')],
+                   key=lambda x: x[0], reverse=True)
+
+    for target_idx, label_value, suffix in order:
+        paragraphs = list_paragraphs(xml)
+        if target_idx >= len(paragraphs):
+            continue
+        ps, pe, _ = paragraphs[target_idx]
+        ppr = get_ppr(xml[ps:pe])
+        new_para = build_header_para(ppr, label_value, suffix)
+        xml = xml[:ps] + new_para + xml[pe:]
+
+    return xml
+
+
+def validate_xml(xml_str: str) -> None:
+    """Raise ValueError if XML is not well-formed."""
+    try:
+        # Register common OOXML namespaces to avoid parse errors
+        ET.fromstring(xml_str.encode('utf-8'))
+    except ET.ParseError as e:
+        raise ValueError(f'合約 XML 格式有誤，無法轉換此檔案（{e}）')
+
+
 def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
     """
     Convert a 對業主 contract to a 對悠勢 contract.
@@ -157,44 +264,11 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
 
     company = COMPANIES[company_name]
 
-    # --- Update header 出租人 / 承租人 ---
-    paragraphs = list_paragraphs(xml)
-    out_idx = in_idx = None
-    for i, (_, _, text) in enumerate(paragraphs[:25]):
-        if '出租人：' in text and '下稱' in text and out_idx is None:
-            out_idx = i
-        if '承租人：' in text and '下稱' in text and in_idx is None:
-            in_idx = i
+    xml = update_header_parties(xml, company_name)
+    xml = replace_signature_section(xml, company)
 
-    if out_idx is not None and in_idx is not None:
-        # Replace 承租人 first (farther down), then 出租人
-        for target_idx, label_value, suffix in [
-            (in_idx, f'承租人：{USPACE["name"]}', '（下稱「乙方」）'),
-            (out_idx, f'出租人：{company_name}', '（下稱「甲方」）'),
-        ]:
-            ps, pe, _ = paragraphs[target_idx]
-            ppr = get_ppr(xml[ps:pe])
-            new_para = build_header_para(ppr, label_value, suffix)
-            xml = xml[:ps] + new_para + xml[pe:]
-            paragraphs = list_paragraphs(xml)
+    validate_xml(xml)
 
-    # --- Replace signature section ---
-    sig_marker = xml.find('立契約書人')
-    if sig_marker != -1:
-        sig_start = xml.rfind('<w:p', 0, sig_marker)
-        body_end = xml.find('</w:body>')
-
-        # Preserve <w:sectPr> (page layout) if present after signature start
-        sect_idx = xml.rfind('<w:sectPr', sig_start, body_end)
-        new_sig = build_signature_section(company)
-
-        if sect_idx != -1:
-            sect_end = xml.find('</w:sectPr>', sect_idx) + 11
-            xml = xml[:sig_start] + new_sig + xml[sect_idx:sect_end] + '</w:body>' + xml[body_end + 9:]
-        else:
-            xml = xml[:sig_start] + new_sig + '</w:body>' + xml[body_end + 9:]
-
-    # --- Build output docx ---
     output = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(docx_bytes), 'r') as zin, \
          zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
