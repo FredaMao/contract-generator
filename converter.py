@@ -12,6 +12,9 @@ COMPANIES = {
         'contact_label': '聯絡電話',
         'contact': '0917-444-186',
         'address': '臺北市中山區長安東路2段80號10樓之1',
+        'bank': '國泰世華銀行 慶城分行',
+        'account_name': '志昌資產管理有限公司',
+        'account_no': '268035011822',
     },
     '瀚昱開發股份有限公司': {
         'name': '瀚昱開發股份有限公司',
@@ -20,6 +23,9 @@ COMPANIES = {
         'contact_label': '電子郵件',
         'contact': 'service@hanyudev.com',
         'address': '臺北市中山區松江路50號9樓',
+        'bank': '凱基商業銀行 城東分行',
+        'account_name': '瀚昱開發股份有限公司',
+        'account_no': '60070100034483',
     },
     '毅源開發股份有限公司': {
         'name': '毅源開發股份有限公司',
@@ -28,6 +34,9 @@ COMPANIES = {
         'contact_label': '電子郵件',
         'contact': 'service@yiyuandev.com',
         'address': '臺北市松山區寶清街21號4樓之1',
+        'bank': '凱基商業銀行 城東分行',
+        'account_name': '毅源開發股份有限公司',
+        'account_no': '60070100034496',
     },
 }
 
@@ -239,6 +248,78 @@ def update_header_parties(xml: str, company_name: str) -> str:
     return xml
 
 
+def fill_bank_account_table(xml: str, company: dict) -> str:
+    """
+    Find the 甲方指定匯款銀行帳戶 table and fill the right column cells
+    with the company's bank account info.
+    Table rows (in order): 銀行名稱（含分行）, 帳戶名稱, 帳戶號碼
+    """
+    if 'bank' not in company:
+        return xml
+
+    marker = xml.find('甲方指定匯款銀行帳戶')
+    if marker == -1:
+        return xml
+
+    tbl_start = xml.find('<w:tbl>', marker)
+    if tbl_start == -1:
+        return xml
+    tbl_end = xml.find('</w:tbl>', tbl_start) + 8
+    tbl_xml = xml[tbl_start:tbl_end]
+
+    values = [company['bank'], company['account_name'], company['account_no']]
+
+    # Find each <w:tr> in the table and fill its second <w:tc>
+    new_tbl = tbl_xml
+    tr_pos = 0
+    row_idx = 0
+    while row_idx < len(values):
+        tr_start = new_tbl.find('<w:tr ', tr_pos)
+        if tr_start == -1:
+            tr_start = new_tbl.find('<w:tr>', tr_pos)
+        if tr_start == -1:
+            break
+        tr_end = new_tbl.find('</w:tr>', tr_start) + 7
+        tr_xml = new_tbl[tr_start:tr_end]
+
+        # Find the second <w:tc> (value column)
+        tc1_end = tr_xml.find('</w:tc>') + 7
+        tc2_start = tr_xml.find('<w:tc', tc1_end)
+        tc2_end = tr_xml.find('</w:tc>', tc2_start) + 7
+
+        if tc2_start == -1 or tc2_end == -1:
+            tr_pos = tr_end
+            row_idx += 1
+            continue
+
+        tc2_xml = tr_xml[tc2_start:tc2_end]
+
+        # Find the <w:p> inside this cell and replace its content
+        p_start = tc2_xml.find('<w:p')
+        p_end = tc2_xml.find('</w:p>', p_start) + 6
+        p_xml = tc2_xml[p_start:p_end]
+        ppr = get_ppr(p_xml)
+
+        rpr = ('<w:rPr>'
+               '<w:rFonts w:ascii="Microsoft JhengHei UI" w:eastAsia="Microsoft JhengHei UI"'
+               ' w:hAnsi="Microsoft JhengHei UI" w:cs="思源黑體"/>'
+               '<w:color w:val="000000"/>'
+               '</w:rPr>')
+        new_p = (f'<w:p>{ppr}'
+                 f'<w:r>{rpr}'
+                 f'<w:t xml:space="preserve">{xml_escape(values[row_idx])}</w:t>'
+                 f'</w:r></w:p>')
+
+        new_tc2 = tc2_xml[:p_start] + new_p + tc2_xml[p_end:]
+        new_tr = tr_xml[:tc2_start] + new_tc2 + tr_xml[tc2_end:]
+        new_tbl = new_tbl[:tr_start] + new_tr + new_tbl[tr_end:]
+
+        tr_pos = tr_start + len(new_tr)
+        row_idx += 1
+
+    return xml[:tbl_start] + new_tbl + xml[tbl_end:]
+
+
 def validate_xml(xml_str: str) -> None:
     """Raise ValueError if XML is not well-formed."""
     try:
@@ -265,6 +346,7 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
     company = COMPANIES[company_name]
 
     xml = update_header_parties(xml, company_name)
+    xml = fill_bank_account_table(xml, company)
     xml = replace_signature_section(xml, company)
 
     validate_xml(xml)
