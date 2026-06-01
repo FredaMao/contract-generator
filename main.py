@@ -2,11 +2,13 @@ import io
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from urllib.parse import quote
 from converter import convert_contract
 
-app = FastAPI(title="合約自動產生器")
+app = FastAPI(title="合約轉換器")
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)

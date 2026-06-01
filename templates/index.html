@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>合約自動產生器｜悠勢科技</title>
+<title>合約轉換器｜悠勢科技</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -23,7 +23,9 @@ body {
     max-width: 560px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.08);
 }
-.logo { font-size: 13px; color: #aaa; margin-bottom: 6px; letter-spacing: 1px; }
+.logo { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.logo img { width: 32px; height: 32px; object-fit: contain; }
+.logo span { font-size: 13px; color: #aaa; letter-spacing: 1px; }
 h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
 .tagline { font-size: 13px; color: #8a97a8; margin-bottom: 28px; }
 
@@ -152,9 +154,12 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
 </head>
 <body>
 <div class="card">
-    <div class="logo">悠勢科技股份有限公司</div>
-    <h1>合約自動產生器</h1>
-    <p class="tagline">IPO 換約專案 ｜ 對業主合約 → 對悠勢合約</p>
+    <div class="logo">
+        <img src="/static/logo.png" alt="悠勢科技 Logo">
+        <span>悠勢科技股份有限公司</span>
+    </div>
+    <h1>合約轉換器</h1>
+    <p class="tagline">對業主合約 → 對悠勢合約</p>
 
     <div class="flow">
         <span class="pill">對業主合約</span>
