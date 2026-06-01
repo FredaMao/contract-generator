@@ -248,11 +248,10 @@ def update_header_parties(xml: str, company_name: str) -> str:
     return xml
 
 
-def fill_bank_account_table(xml: str, company: dict) -> str:
+def fill_bank_account(xml: str, company: dict) -> str:
     """
-    Find the 甲方指定匯款銀行帳戶 table and fill the right column cells
-    with the company's bank account info.
-    Table rows (in order): 銀行名稱（含分行）, 帳戶名稱, 帳戶號碼
+    Fill 甲方指定匯款銀行帳戶 with company bank info.
+    Handles both table format (租金) and paragraph format (分潤).
     """
     if 'bank' not in company:
         return xml
@@ -261,63 +260,74 @@ def fill_bank_account_table(xml: str, company: dict) -> str:
     if marker == -1:
         return xml
 
-    tbl_start = xml.find('<w:tbl>', marker)
-    if tbl_start == -1:
-        return xml
-    tbl_end = xml.find('</w:tbl>', tbl_start) + 8
-    tbl_xml = xml[tbl_start:tbl_end]
-
     values = [company['bank'], company['account_name'], company['account_no']]
+    tbl_start = xml.find('<w:tbl>', marker)
 
-    # Find each <w:tr> in the table and fill its second <w:tc>
-    new_tbl = tbl_xml
-    tr_pos = 0
-    row_idx = 0
-    while row_idx < len(values):
-        tr_start = new_tbl.find('<w:tr ', tr_pos)
-        if tr_start == -1:
-            tr_start = new_tbl.find('<w:tr>', tr_pos)
-        if tr_start == -1:
-            break
-        tr_end = new_tbl.find('</w:tr>', tr_start) + 7
-        tr_xml = new_tbl[tr_start:tr_end]
-
-        # Find the second <w:tc> (value column)
-        tc1_end = tr_xml.find('</w:tc>') + 7
-        tc2_start = tr_xml.find('<w:tc', tc1_end)
-        tc2_end = tr_xml.find('</w:tc>', tc2_start) + 7
-
-        if tc2_start == -1 or tc2_end == -1:
-            tr_pos = tr_end
-            row_idx += 1
-            continue
-
-        tc2_xml = tr_xml[tc2_start:tc2_end]
-
-        # Find the <w:p> inside this cell and replace its content
-        p_start = tc2_xml.find('<w:p')
-        p_end = tc2_xml.find('</w:p>', p_start) + 6
-        p_xml = tc2_xml[p_start:p_end]
-        ppr = get_ppr(p_xml)
-
+    # --- 租金版：表格格式 ---
+    if tbl_start != -1 and tbl_start < marker + 500:
+        tbl_end = xml.find('</w:tbl>', tbl_start) + 8
+        tbl_xml = xml[tbl_start:tbl_end]
+        new_tbl = tbl_xml
+        tr_pos = 0
+        row_idx = 0
         rpr = ('<w:rPr>'
                '<w:rFonts w:ascii="Microsoft JhengHei UI" w:eastAsia="Microsoft JhengHei UI"'
                ' w:hAnsi="Microsoft JhengHei UI" w:cs="思源黑體"/>'
                '<w:color w:val="000000"/>'
                '</w:rPr>')
-        new_p = (f'<w:p>{ppr}'
-                 f'<w:r>{rpr}'
-                 f'<w:t xml:space="preserve">{xml_escape(values[row_idx])}</w:t>'
-                 f'</w:r></w:p>')
+        while row_idx < len(values):
+            tr_start = new_tbl.find('<w:tr', tr_pos)
+            if tr_start == -1:
+                break
+            tr_end = new_tbl.find('</w:tr>', tr_start) + 7
+            tr_xml = new_tbl[tr_start:tr_end]
+            tc1_end = tr_xml.find('</w:tc>') + 7
+            tc2_start = tr_xml.find('<w:tc', tc1_end)
+            tc2_end = tr_xml.find('</w:tc>', tc2_start) + 7
+            if tc2_start == -1:
+                tr_pos = tr_end
+                row_idx += 1
+                continue
+            tc2_xml = tr_xml[tc2_start:tc2_end]
+            p_start = tc2_xml.find('<w:p')
+            p_end = tc2_xml.find('</w:p>', p_start) + 6
+            ppr = get_ppr(tc2_xml[p_start:p_end])
+            new_p = (f'<w:p>{ppr}<w:r>{rpr}'
+                     f'<w:t xml:space="preserve">{xml_escape(values[row_idx])}</w:t>'
+                     f'</w:r></w:p>')
+            new_tc2 = tc2_xml[:p_start] + new_p + tc2_xml[p_end:]
+            new_tr = tr_xml[:tc2_start] + new_tc2 + tr_xml[tc2_end:]
+            new_tbl = new_tbl[:tr_start] + new_tr + new_tbl[tr_end:]
+            tr_pos = tr_start + len(new_tr)
+            row_idx += 1
+        return xml[:tbl_start] + new_tbl + xml[tbl_end:]
 
-        new_tc2 = tc2_xml[:p_start] + new_p + tc2_xml[p_end:]
-        new_tr = tr_xml[:tc2_start] + new_tc2 + tr_xml[tc2_end:]
-        new_tbl = new_tbl[:tr_start] + new_tr + new_tbl[tr_end:]
+    # --- 分潤版：段落格式 ---
+    # Labels map to values
+    label_value_map = [
+        ('銀行名稱（含分行）', company['bank']),
+        ('帳戶名稱：',         company['account_name']),
+        ('帳戶號碼：',         company['account_no']),
+    ]
+    search_from = marker
+    for label, value in label_value_map:
+        idx = xml.find(label, search_from)
+        if idx == -1:
+            continue
+        # Find the <w:t> tag that contains this label
+        t_open = xml.rfind('<w:t', 0, idx)
+        t_close = xml.find('</w:t>', t_open) + 6
+        if t_open == -1 or t_close == 5:
+            continue
+        # Reconstruct: keep original label text, append value
+        t_content = xml[t_open:t_close]
+        inner = re.sub(r'^<w:t[^>]*>', '', t_content)
+        inner = inner.replace('</w:t>', '').rstrip()
+        new_t = f'<w:t xml:space="preserve">{xml_escape(inner)}{xml_escape(value)}</w:t>'
+        xml = xml[:t_open] + new_t + xml[t_close:]
+        search_from = t_open + len(new_t)
 
-        tr_pos = tr_start + len(new_tr)
-        row_idx += 1
-
-    return xml[:tbl_start] + new_tbl + xml[tbl_end:]
+    return xml
 
 
 def validate_xml(xml_str: str) -> None:
@@ -346,7 +356,7 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
     company = COMPANIES[company_name]
 
     xml = update_header_parties(xml, company_name)
-    xml = fill_bank_account_table(xml, company)
+    xml = fill_bank_account(xml, company)
     xml = replace_signature_section(xml, company)
 
     validate_xml(xml)
