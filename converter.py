@@ -311,12 +311,71 @@ def replace_party_paras_in_place(xml: str, company: dict, sig_idx: int,
     return xml
 
 
+def update_bottom_sig_in_place(xml: str, company: dict, sig_idx: int,
+                                paragraphs: list, font: str) -> str:
+    """
+    Update bottom signature section in-place: preserve every original field label,
+    replace only the values for recognised fields (company name, person, ID,
+    address, phone, email).
+    """
+    c = company
+    u = USPACE
+    n = len(paragraphs)
+    search_end = min(sig_idx + 50, n)
+    current_data = None
+    to_replace = []
+
+    for abs_i in range(sig_idx, search_end):
+        text = paragraphs[abs_i][2].strip()
+        if not text:
+            continue
+
+        colon_pos = max(text.rfind('：'), text.rfind(':'))
+        if colon_pos == -1:
+            continue
+
+        label = text[:colon_pos + 1]
+        rest = text[colon_pos + 1:]
+        label_norm = re.sub(r'[　\s：:]+', '', label)
+
+        sfx_m = re.search(r'[　\s]*[（(]', rest)
+        sfx = rest[sfx_m.start():] if sfx_m else ''
+
+        if label_norm.startswith('甲'):
+            current_data = c
+        elif label_norm.startswith('乙'):
+            current_data = u
+
+        if current_data is None:
+            continue
+
+        new_value = None
+
+        if re.match(r'^[甲乙]方', label_norm):
+            new_value = current_data['name'] + sfx
+        elif re.match(r'^(代表人|負責人)', label_norm):
+            new_value = ' ' + current_data['person']
+        elif re.match(r'^(統一編號|身分證字號|統編)', label_norm):
+            new_value = current_data['id']
+        elif re.match(r'^(聯絡地址|地址)', label_norm):
+            new_value = current_data['address']
+        elif re.match(r'^聯絡電話', label_norm):
+            new_value = (current_data['contact']
+                         if current_data.get('contact_label') == '聯絡電話' else '')
+        elif re.match(r'^電子郵件', label_norm):
+            new_value = (current_data['contact']
+                         if current_data.get('contact_label') == '電子郵件' else '')
+
+        if new_value is not None:
+            to_replace.append((abs_i, label + new_value))
+
+    for abs_i, new_text in reversed(to_replace):
+        xml = _rebuild_party_para(xml, abs_i, list_paragraphs(xml), new_text, font)
+
+    return xml
+
+
 def replace_signature_section(xml: str, company: dict, font: str = '思源黑體') -> str:
-    """
-    Find signature section and update party info.
-    - Top-of-doc signatures (補充協議書): only replace the party paragraphs in place.
-    - Bottom-of-doc signatures (standard lease): replace from sig_start to body end.
-    """
     paragraphs = list_paragraphs(xml)
     company_name = company['name']
 
@@ -324,43 +383,13 @@ def replace_signature_section(xml: str, company: dict, font: str = '思源黑體
     if sig_idx == -1:
         return xml
 
-    label_fmt = detect_sig_label_format(xml, sig_idx, paragraphs)
     n = len(paragraphs)
 
-    # Signature at top of document → in-place party replacement only
     if sig_idx < n * 0.20:
+        label_fmt = detect_sig_label_format(xml, sig_idx, paragraphs)
         return replace_party_paras_in_place(xml, company, sig_idx, paragraphs, font, label_fmt)
 
-    # Signature at bottom → replace everything from sig_start to body end
-    sig_start = paragraphs[sig_idx][0]
-    body_end_tag = '</w:body>'
-    body_end = xml.find(body_end_tag)
-    if body_end == -1:
-        return xml
-
-    # Don't cut inside a table
-    content_before = xml[:sig_start]
-    open_tbls = content_before.count('<w:tbl>') + len(re.findall(r'<w:tbl\s', content_before))
-    close_tbls = content_before.count('</w:tbl>')
-    if open_tbls > close_tbls:
-        return xml
-
-    sig_title_text = paragraphs[sig_idx][2].strip() or '立契約書人'
-    new_sig = build_signature_section(company, font=font, label_fmt=label_fmt,
-                                       sig_title=sig_title_text)
-
-    sect_match = list(re.finditer(r'<w:sectPr[\s>]', xml[sig_start:body_end]))
-    if sect_match:
-        sect_rel = sect_match[-1].start()
-        sect_abs = sig_start + sect_rel
-        sect_end = xml.find('</w:sectPr>', sect_abs)
-        if sect_end != -1:
-            sect_end += 11
-            return (xml[:sig_start] + new_sig +
-                    xml[sect_abs:sect_end] +
-                    body_end_tag + xml[body_end + len(body_end_tag):])
-
-    return xml[:sig_start] + new_sig + body_end_tag + xml[body_end + len(body_end_tag):]
+    return update_bottom_sig_in_place(xml, company, sig_idx, paragraphs, font)
 
 
 def _split_label_value_suffix(text: str, known_value: str = None) -> tuple:
