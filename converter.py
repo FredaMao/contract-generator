@@ -420,9 +420,16 @@ def _rebuild_party_para(xml: str, para_idx: int, paragraphs: list, new_text: str
     if para_idx >= len(paragraphs):
         return xml
     ps, pe, _ = paragraphs[para_idx]
-    ppr = get_ppr(xml[ps:pe])
-    rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', xml[ps:pe], re.DOTALL)
-    rpr = f'<w:rPr>{rpr_m.group(1)}</w:rPr>' if rpr_m else make_rpr(font)
+    para_xml = xml[ps:pe]
+    ppr = get_ppr(para_xml)
+    # 1. Try run-level rPr (most specific)
+    rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
+    if rpr_m:
+        rpr = f'<w:rPr>{rpr_m.group(1)}</w:rPr>'
+    else:
+        # 2. Try paragraph-mark rPr from pPr (often carries the same font when runs inherit it)
+        ppr_rpr_m = re.search(r'<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
+        rpr = f'<w:rPr>{ppr_rpr_m.group(1)}</w:rPr>' if ppr_rpr_m else make_rpr(font)
     new_p = (f'<w:p>{ppr}'
              f'<w:r>{rpr}'
              f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
@@ -430,7 +437,7 @@ def _rebuild_party_para(xml: str, para_idx: int, paragraphs: list, new_text: str
     return xml[:ps] + new_p + xml[pe:]
 
 
-def update_header_parties(xml: str, company_name: str) -> str:
+def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
     """
     Update party names in the contract header/preamble.
     Preserves original labels (甲方/乙方/出租人/承租人/etc.) and suffixes.
@@ -454,7 +461,8 @@ def update_header_parties(xml: str, company_name: str) -> str:
             jia_idx = i
             break
 
-    font = detect_main_font(xml)
+    if not font:
+        font = detect_main_font(xml)
     to_update = []
 
     # 乙方 paragraph → replace company name with 悠勢, preserve label+suffix
@@ -584,6 +592,10 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
     """
     with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
         xml = z.read('word/document.xml').decode('utf-8')
+        try:
+            styles_xml = z.read('word/styles.xml').decode('utf-8')
+        except KeyError:
+            styles_xml = ''
 
     plain = get_plain_text(xml)
     company_name = detect_company(plain)
@@ -592,8 +604,8 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
 
     company = COMPANIES[company_name]
 
-    font = detect_main_font(xml)
-    xml = update_header_parties(xml, company_name)
+    font = detect_main_font(xml + styles_xml)
+    xml = update_header_parties(xml, company_name, font=font)
     xml = fill_bank_account(xml, company)
     xml = replace_signature_section(xml, company, font=font)
 
