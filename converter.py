@@ -228,11 +228,16 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
     """
     n = len(paragraphs)
 
-    # Strategy 1: "立契約書人" / "立補充協議書人" / "立協議書人" etc.
+    # Strategy 1: Find the LAST "立契約書人" / "立補充協議書人" etc.
+    # Using LAST occurrence so contracts with both a brief top section and a
+    # detailed bottom section (like 補充協議書) use the detailed bottom one.
     SIG_MARKERS = ('立契約書人', '立補充協議書人', '立協議書人', '立合約書人', '立租賃契約書人')
+    last_sig = -1
     for i, (_, _, text) in enumerate(paragraphs):
         if any(m in text for m in SIG_MARKERS):
-            return i
+            last_sig = i
+    if last_sig != -1:
+        return last_sig
 
     # Strategy 2: "(簽名頁如後)" → next section is signature page
     for i, (_, _, text) in enumerate(paragraphs):
@@ -278,45 +283,29 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
 def replace_party_paras_in_place(xml: str, company: dict, sig_idx: int,
                                    paragraphs: list, font: str, label_fmt: str) -> str:
     """
-    For top-of-document signatures (補充協議書 etc.).
-    Only replace 甲方 / 乙方 paragraphs in place; leave everything else untouched.
+    For top-of-document signatures (only a brief top party section, no bottom section).
+    Replaces party VALUES while preserving original labels and suffixes.
     """
     c = company
     u = USPACE
     search_end = min(sig_idx + 25, len(paragraphs))
-    to_replace = []  # (para_abs_idx, new_text)
+    to_replace = []
 
     for abs_i in range(sig_idx, search_end):
         text = paragraphs[abs_i][2].strip()
-        # 甲方 label paragraph (business owner → replace with company)
-        if re.match(r'^甲[　\s]*方[：:]', text) or re.match(r'^出租人[：:]', text):
-            if label_fmt == 'spaced':
-                new_text = f'甲　方：{c["name"]}　（以下簡稱甲方）'
-            else:
-                new_text = f'甲方（蓋章）：{c["name"]}'
-            to_replace.append((abs_i, new_text))
-        # 乙方 label paragraph (company → replace with 悠勢)
-        elif (re.match(r'^乙[　\s]*方[：:]', text) or re.match(r'^承租人[：:]', text)) and c['name'] in text:
-            if label_fmt == 'spaced':
-                new_text = f'乙　方：{u["name"]}　（以下簡稱乙方）'
-            else:
-                new_text = f'乙方（蓋章）：{u["name"]}'
-            to_replace.append((abs_i, new_text))
 
-    # Apply in reverse order so positions stay valid
+        # 甲方 paragraph (business owner → company)
+        if re.search(r'^(甲[　\s]*方|出租人)[（：:]', text):
+            lbl, _, sfx = _split_label_value_suffix(text, c['name'])
+            to_replace.append((abs_i, lbl + c['name'] + sfx))
+
+        # 乙方 paragraph with company name (company → 悠勢)
+        elif re.search(r'^(乙[　\s]*方|承租人)[（：:]', text) and c['name'] in text:
+            lbl, _, sfx = _split_label_value_suffix(text, u['name'])
+            to_replace.append((abs_i, lbl + u['name'] + sfx))
+
     for abs_i, new_text in reversed(to_replace):
-        paragraphs = list_paragraphs(xml)
-        if abs_i >= len(paragraphs):
-            continue
-        ps, pe, _ = paragraphs[abs_i]
-        ppr = get_ppr(xml[ps:pe])
-        rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', xml[ps:pe], re.DOTALL)
-        rpr = f'<w:rPr>{rpr_m.group(1)}</w:rPr>' if rpr_m else make_rpr(font)
-        new_p = (f'<w:p>{ppr}'
-                 f'<w:r>{rpr}'
-                 f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
-                 f'</w:r></w:p>')
-        xml = xml[:ps] + new_p + xml[pe:]
+        xml = _rebuild_party_para(xml, abs_i, list_paragraphs(xml), new_text, font)
 
     return xml
 
@@ -373,55 +362,85 @@ def replace_signature_section(xml: str, company: dict, font: str = '思源黑體
     return xml[:sig_start] + new_sig + body_end_tag + xml[body_end + len(body_end_tag):]
 
 
+def _split_label_value_suffix(text: str, known_value: str = None) -> tuple:
+    """
+    Split paragraph text into (label, value, suffix).
+    label  = everything up to and including the last ：
+    value  = known_value if provided, else content between label and suffix
+    suffix = trailing （以下簡稱…）or（下稱…）etc.
+    """
+    colon_pos = max(text.rfind('：'), text.rfind(':'))
+    if colon_pos < 0:
+        return text, '', ''
+    label = text[:colon_pos + 1]
+    rest = text[colon_pos + 1:]
+    sfx_match = re.search(r'[　\s]*[（(]', rest)
+    if sfx_match:
+        suffix = rest[sfx_match.start():]
+        value = rest[:sfx_match.start()].strip()
+    else:
+        suffix = ''
+        value = rest.strip()
+    return label, known_value if known_value is not None else value, suffix
+
+
+def _rebuild_party_para(xml: str, para_idx: int, paragraphs: list, new_text: str, font: str) -> str:
+    """Replace a single party paragraph with new_text, preserving pPr and rPr."""
+    paragraphs = list_paragraphs(xml)
+    if para_idx >= len(paragraphs):
+        return xml
+    ps, pe, _ = paragraphs[para_idx]
+    ppr = get_ppr(xml[ps:pe])
+    rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', xml[ps:pe], re.DOTALL)
+    rpr = f'<w:rPr>{rpr_m.group(1)}</w:rPr>' if rpr_m else make_rpr(font)
+    new_p = (f'<w:p>{ppr}'
+             f'<w:r>{rpr}'
+             f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
+             f'</w:r></w:p>')
+    return xml[:ps] + new_p + xml[pe:]
+
+
 def update_header_parties(xml: str, company_name: str) -> str:
     """
     Update party names in the contract header/preamble.
-    Tries multiple patterns to handle different contract formats.
+    Preserves original labels (甲方/乙方/出租人/承租人/etc.) and suffixes.
     """
     paragraphs = list_paragraphs(xml)
-    out_idx = in_idx = None
+    yi_idx = jia_idx = None
 
-    # Strategy 1: "出租人：...下稱甲方" / "承租人：...下稱乙方"
+    # Find 乙方 paragraph: has company name AND a party label character
     for i, (_, _, text) in enumerate(paragraphs[:35]):
-        if '出租人：' in text and '下稱' in text and out_idx is None:
-            out_idx = i
-        if '承租人：' in text and '下稱' in text and in_idx is None:
-            in_idx = i
+        if company_name in text and re.search(r'[乙出承][　\s]*(方|租人)[：:]', text):
+            yi_idx = i
+            break
 
-    # Strategy 2: "甲方...下稱甲方" / "乙方...下稱乙方" style (some contracts)
-    if out_idx is None or in_idx is None:
-        for i, (_, _, text) in enumerate(paragraphs[:35]):
-            if '下稱「甲方」' in text and out_idx is None:
-                out_idx = i
-            if '下稱「乙方」' in text and in_idx is None:
-                in_idx = i
+    if yi_idx is None:
+        return xml
 
-    # Strategy 3: Company name + 乙方 LABEL (not just mentioned in suffix like "以下簡稱乙方")
-    if in_idx is None:
-        for i, (_, _, text) in enumerate(paragraphs[:35]):
-            if company_name in text and re.search(r'乙[　\s]*方[：:]|承租人[：:]', text):
-                in_idx = i
-                break
+    # Find 甲方 paragraph: a nearby paragraph before yi_idx with 甲/出 label
+    for i in range(yi_idx - 1, max(-1, yi_idx - 8), -1):
+        _, _, text = paragraphs[i]
+        if re.search(r'^[甲出][　\s]*(方|租人)[（：:]', text.strip()):
+            jia_idx = i
+            break
 
-    if out_idx is None and in_idx is None:
-        return xml  # Nothing found in header
+    font = detect_main_font(xml)
+    to_update = []
 
-    # Process the ones we found (later index first)
-    updates = []
-    if in_idx is not None:
-        updates.append((in_idx, f'承租人：{USPACE["name"]}', '（下稱「乙方」）'))
-    if out_idx is not None:
-        updates.append((out_idx, f'出租人：{company_name}', '（下稱「甲方」）'))
-    updates.sort(key=lambda x: x[0], reverse=True)
+    # 乙方 paragraph → replace company name with 悠勢, preserve label+suffix
+    yi_text = paragraphs[yi_idx][2]
+    lbl, _, sfx = _split_label_value_suffix(yi_text, USPACE['name'])
+    to_update.append((yi_idx, lbl + USPACE['name'] + sfx))
 
-    for target_idx, label_value, suffix in updates:
-        paragraphs = list_paragraphs(xml)
-        if target_idx >= len(paragraphs):
-            continue
-        ps, pe, _ = paragraphs[target_idx]
-        ppr = get_ppr(xml[ps:pe])
-        new_para = build_header_para(ppr, label_value, suffix)
-        xml = xml[:ps] + new_para + xml[pe:]
+    # 甲方 paragraph → replace business owner with company, preserve label+suffix
+    if jia_idx is not None:
+        jia_text = paragraphs[jia_idx][2]
+        lbl, _, sfx = _split_label_value_suffix(jia_text, company_name)
+        to_update.append((jia_idx, lbl + company_name + sfx))
+
+    # Apply later index first
+    for idx, new_text in sorted(to_update, key=lambda x: x[0], reverse=True):
+        xml = _rebuild_party_para(xml, idx, list_paragraphs(xml), new_text, font)
 
     return xml
 
