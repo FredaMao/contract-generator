@@ -234,7 +234,8 @@ def find_sig_section_idx(paragraphs: list, company_name: str) -> int:
     SIG_MARKERS = ('立契約書人', '立補充協議書人', '立協議書人', '立合約書人', '立租賃契約書人')
     last_sig = -1
     for i, (_, _, text) in enumerate(paragraphs):
-        if any(m in text for m in SIG_MARKERS):
+        text_norm = re.sub(r'[　\s]+', '', text)
+        if any(m in text_norm for m in SIG_MARKERS):
             last_sig = i
     if last_sig != -1:
         return last_sig
