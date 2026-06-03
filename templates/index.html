@@ -210,6 +210,27 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <span class="fname" id="fname"></span>
             <button class="remove" id="remove-btn" title="移除">✕</button>
         </div>
+        <div id="detected-income" style="display:none; margin-top:14px;">
+            <div class="section-label" style="margin-bottom:10px;">偵測結果 — 所得代號</div>
+            <div class="ic-group">
+                <div class="ic-row">
+                    <span class="ic-cat">個人</span>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="空地租賃(51L)"> 空地租賃 (51L)</label>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="建物租賃(51J)"> 建物租賃 (51J)</label>
+                </div>
+                <div class="ic-row">
+                    <span class="ic-cat">法人</span>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="00發票"> 00 發票</label>
+                </div>
+                <div class="ic-row">
+                    <span class="ic-cat">管委會</span>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="空地租賃(51L)"> 空地租賃 (51L)</label>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="建物租賃(51J)"> 建物租賃 (51J)</label>
+                    <label class="ic-opt"><input type="radio" name="cv_income_code" value="00發票"> 00 發票</label>
+                </div>
+            </div>
+        </div>
+
         <button class="btn" id="convert-btn" disabled onclick="doConvert()">產生對悠勢合約</button>
         <div class="status" id="convert-status"></div>
         <div class="companies">
@@ -485,7 +506,7 @@ dropZone.addEventListener('drop', function(e) {
     if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
 });
 
-function setFile(file) {
+async function setFile(file) {
     if (!file.name.toLowerCase().endsWith('.docx')) {
         showStatus('convert-status', '請上傳 .docx 格式的檔案', 'error'); return;
     }
@@ -494,6 +515,22 @@ function setFile(file) {
     fileSelectedEl.style.display = 'flex';
     convertBtn.disabled = false;
     document.getElementById('convert-status').style.display = 'none';
+    // Auto-detect income code
+    document.getElementById('detected-income').style.display = 'none';
+    document.querySelectorAll('input[name="cv_income_code"]').forEach(function(r) { r.checked = false; });
+    try {
+        var fd = new FormData(); fd.append('file', file);
+        var res = await fetch('/detect', { method: 'POST', body: fd });
+        if (res.ok) {
+            var data = await res.json();
+            if (data.income_code) {
+                document.getElementById('detected-income').style.display = 'block';
+                document.querySelectorAll('input[name="cv_income_code"]').forEach(function(r) {
+                    if (r.value === data.income_code) r.checked = true;
+                });
+            }
+        }
+    } catch (e) {}
 }
 
 function clearFile() {
@@ -502,6 +539,8 @@ function clearFile() {
     fileSelectedEl.style.display = 'none';
     convertBtn.disabled = true;
     document.getElementById('convert-status').style.display = 'none';
+    document.getElementById('detected-income').style.display = 'none';
+    document.querySelectorAll('input[name="cv_income_code"]').forEach(function(r) { r.checked = false; });
 }
 
 async function doConvert() {
@@ -510,6 +549,8 @@ async function doConvert() {
     showStatus('convert-status', '<span class="spinner"></span>轉換中，請稍候…', 'loading');
     var fd = new FormData();
     fd.append('file', selectedFile);
+    var checked = document.querySelector('input[name="cv_income_code"]:checked');
+    if (checked) fd.append('income_code', checked.value);
     try {
         var res = await fetch('/convert', { method: 'POST', body: fd });
         if (!res.ok) {

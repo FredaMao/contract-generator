@@ -121,6 +121,30 @@ def xml_escape(text: str) -> str:
             .replace('"', '&quot;'))
 
 
+def detect_income_code(plain_text: str) -> str:
+    """Detect income code (所得代號) from plain contract text."""
+    if re.search(r'\b51L\b', plain_text):
+        return '空地租賃(51L)'
+    if re.search(r'\b51J\b', plain_text):
+        return '建物租賃(51J)'
+    if re.search(r'(?:所得代號|代號)[：:]\s*00\b', plain_text):
+        return '00發票'
+    if re.search(r'\b00\b.*?發票|發票.*?\b00\b', plain_text):
+        return '00發票'
+    return ''
+
+
+def update_header_income_code(header_xml: str, income_code: str) -> str:
+    """Insert income_code value after 所得代號： label in a header XML string."""
+    if not income_code:
+        return header_xml
+    return re.sub(
+        r'(<w:t[^>]*>)([^<]*所得代號[：:])([^<]*)(</w:t>)',
+        lambda m: f'{m.group(1)}{m.group(2)}{income_code}{m.group(4)}',
+        header_xml,
+    )
+
+
 def _strip_highlights(xml: str) -> str:
     xml = re.sub(r'<w:highlight\b[^/]*/>', '', xml)
     xml = re.sub(r'<w:shd\b[^/]*/>', '', xml, flags=re.DOTALL)
@@ -627,7 +651,7 @@ def validate_xml(xml_str: str) -> None:
         raise ValueError(f'合約 XML 格式有誤，無法轉換此檔案（{e}）')
 
 
-def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
+def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str = '') -> tuple:
     """
     Convert a 對業主 contract to a 對悠勢 contract.
     Returns (output_bytes, output_filename).
@@ -644,6 +668,8 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
     company_name = detect_company(plain)
     if not company_name:
         raise ValueError('無法識別合約中的公司（志昌／瀚昱／毅源），請確認上傳的是對業主合約')
+    if not income_code:
+        income_code = detect_income_code(plain)
 
     company = COMPANIES[company_name]
 
@@ -663,6 +689,10 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
                 data = _strip_highlights(xml).encode('utf-8')
             elif item.filename == 'word/styles.xml':
                 data = _strip_highlights(data.decode('utf-8')).encode('utf-8')
+            elif item.filename.startswith('word/header') and income_code:
+                hdr = data.decode('utf-8')
+                hdr = update_header_income_code(hdr, income_code)
+                data = hdr.encode('utf-8')
             zout.writestr(item, data)
 
     base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename

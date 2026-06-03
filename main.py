@@ -1,10 +1,11 @@
 import io
+import zipfile
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from urllib.parse import quote
-from converter import convert_contract
+from converter import convert_contract, get_plain_text, detect_income_code
 from generator import generate_contract
 
 app = FastAPI(title="合約系統｜悠勢科技")
@@ -17,13 +18,28 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/convert")
-async def convert(file: UploadFile = File(...)):
+@app.post("/detect")
+async def detect(file: UploadFile = File(...)):
     if not file.filename.lower().endswith('.docx'):
         raise HTTPException(status_code=400, detail="請上傳 .docx 格式的檔案")
     content = await file.read()
     try:
-        output_bytes, output_filename = convert_contract(content, file.filename)
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            xml = z.read('word/document.xml').decode('utf-8')
+        plain = get_plain_text(xml)
+        income_code = detect_income_code(plain)
+    except Exception:
+        income_code = ''
+    return JSONResponse({"income_code": income_code})
+
+
+@app.post("/convert")
+async def convert(file: UploadFile = File(...), income_code: str = Form('')):
+    if not file.filename.lower().endswith('.docx'):
+        raise HTTPException(status_code=400, detail="請上傳 .docx 格式的檔案")
+    content = await file.read()
+    try:
+        output_bytes, output_filename = convert_contract(content, file.filename, income_code)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
