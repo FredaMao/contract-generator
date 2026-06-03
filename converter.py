@@ -121,6 +121,12 @@ def xml_escape(text: str) -> str:
             .replace('"', '&quot;'))
 
 
+def _strip_highlights(xml: str) -> str:
+    xml = re.sub(r'<w:highlight\b[^/]*/>', '', xml)
+    xml = re.sub(r'<w:shd\b[^/]*/>', '', xml, flags=re.DOTALL)
+    return xml
+
+
 def make_rpr(font: str) -> str:
     return (f'<w:rPr>'
             f'<w:rFonts w:ascii="{font}" w:eastAsia="{font}" w:hAnsi="{font}" w:cs="{font}"/>'
@@ -654,7 +660,9 @@ def convert_contract(docx_bytes: bytes, original_filename: str) -> tuple:
         for item in zin.infolist():
             data = zin.read(item.filename)
             if item.filename == 'word/document.xml':
-                data = xml.encode('utf-8')
+                data = _strip_highlights(xml).encode('utf-8')
+            elif item.filename == 'word/styles.xml':
+                data = _strip_highlights(data.decode('utf-8')).encode('utf-8')
             zout.writestr(item, data)
 
     base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
