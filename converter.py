@@ -49,6 +49,38 @@ USPACE = {
     'address': '臺北市中山區八德路二段232號9樓',
 }
 
+# Fixed per-company signature page field lines (label + value)
+SIG_FIELDS = {
+    '志昌資產管理有限公司': [
+        '甲方名稱：志昌資產管理有限公司',
+        '身分證字號：90634048',
+        '聯絡電話：0917-444-186',
+        '聯絡地址：臺北市中山區長安東路2段80號10樓之1',
+    ],
+    '瀚昱開發股份有限公司': [
+        '甲方名稱：瀚昱開發股份有限公司',
+        '負責人：錢漢洲',
+        '統編：62205204',
+        'Email：service@hanyudev.com',
+        '地址：臺北市中山區松江路50號9樓',
+    ],
+    '毅源開發股份有限公司': [
+        '甲方名稱：毅源開發股份有限公司',
+        '負責人：吳品毅',
+        '統編：62204330',
+        'Email：service@yiyuandev.com',
+        '地址：臺北市松山區寶清街21號4樓之1',
+    ],
+}
+
+USPACE_SIG_FIELDS = [
+    '乙方名稱：悠勢科技股份有限公司',
+    '代表人： 宋捷仁',
+    '統一編號：52492792',
+    '聯絡電話：02-7751-8097',
+    '聯絡地址：臺北市中山區八德路二段232號9樓',
+]
+
 PPR_SIG = (
     '<w:pPr>'
     '<w:spacing w:line="420" w:lineRule="auto"/>'
@@ -67,6 +99,19 @@ RPR_SIG = (
 )
 
 
+def make_ppr_sig(font: str) -> str:
+    return (
+        '<w:pPr>'
+        '<w:spacing w:line="420" w:lineRule="auto"/>'
+        '<w:jc w:val="both"/>'
+        '<w:rPr>'
+        f'<w:rFonts w:ascii="{font}" w:eastAsia="{font}" w:hAnsi="{font}" w:cs="{font}"/>'
+        '<w:color w:val="000000"/>'
+        '</w:rPr>'
+        '</w:pPr>'
+    )
+
+
 def xml_escape(text: str) -> str:
     return (text
             .replace('&', '&amp;')
@@ -83,17 +128,18 @@ def make_rpr(font: str) -> str:
 
 
 def sig_para(text: str, font: str = '思源黑體') -> str:
+    ppr = make_ppr_sig(font)
     rpr = make_rpr(font)
     return (
-        f'<w:p>{PPR_SIG}'
+        f'<w:p>{ppr}'
         f'<w:r>{rpr}'
         f'<w:t xml:space="preserve">{xml_escape(text)}</w:t>'
         f'</w:r></w:p>'
     )
 
 
-def empty_sig_para() -> str:
-    return f'<w:p>{PPR_SIG}</w:p>'
+def empty_sig_para(font: str = '思源黑體') -> str:
+    return f'<w:p>{make_ppr_sig(font)}</w:p>'
 
 
 def get_plain_text(xml: str) -> str:
@@ -314,65 +360,55 @@ def replace_party_paras_in_place(xml: str, company: dict, sig_idx: int,
 def update_bottom_sig_in_place(xml: str, company: dict, sig_idx: int,
                                 paragraphs: list, font: str) -> str:
     """
-    Update bottom signature section in-place: preserve every original field label,
-    replace only the values for recognised fields (company name, person, ID,
-    address, phone, email).
+    Rebuild the bottom signature section using fixed per-company field templates.
+    Preserves the sig-title paragraph (and any empty paras before the 甲方 block)
+    and the date line onward.
     """
-    c = company
-    u = USPACE
     n = len(paragraphs)
-    search_end = min(sig_idx + 50, n)
-    current_data = None
-    to_replace = []
+    search_end = min(sig_idx + 60, n)
+    company_name = company['name']
 
-    for abs_i in range(sig_idx, search_end):
-        text = paragraphs[abs_i][2].strip()
-        if not text:
-            continue
+    # Find the first 甲方-labeled paragraph (start of block to replace)
+    jia_start_idx = None
+    for i in range(sig_idx, search_end):
+        text_norm = re.sub(r'[　\s]+', '', paragraphs[i][2].strip())
+        if re.match(r'^甲方', text_norm):
+            jia_start_idx = i
+            break
 
-        colon_pos = max(text.rfind('：'), text.rfind(':'))
-        if colon_pos == -1:
-            continue
+    if jia_start_idx is None:
+        # fallback: first non-empty paragraph after sig title
+        jia_start_idx = sig_idx + 1
+        while jia_start_idx < search_end and not paragraphs[jia_start_idx][2].strip():
+            jia_start_idx += 1
 
-        label = text[:colon_pos + 1]
-        rest = text[colon_pos + 1:]
-        label_norm = re.sub(r'[　\s：:]+', '', label)
+    # Find the date line (preserve it and everything after)
+    date_idx = None
+    for i in range(jia_start_idx, search_end):
+        text_norm = re.sub(r'[　\s]+', '', paragraphs[i][2])
+        if '中華民國' in text_norm and '年' in paragraphs[i][2]:
+            date_idx = i
+            break
 
-        sfx_m = re.search(r'[　\s]*[（(]', rest)
-        sfx = rest[sfx_m.start():] if sfx_m else ''
+    # Build fixed replacement content from per-company templates
+    jia_fields = SIG_FIELDS.get(company_name, [])
+    new_chunks = []
+    for line in jia_fields:
+        new_chunks.append(sig_para(line, font))
+    new_chunks.append(empty_sig_para(font))
+    for line in USPACE_SIG_FIELDS:
+        new_chunks.append(sig_para(line, font))
+    new_chunks.append(empty_sig_para(font))
+    new_xml = ''.join(new_chunks)
 
-        if label_norm.startswith('甲'):
-            current_data = c
-        elif label_norm.startswith('乙'):
-            current_data = u
+    # Replace from jia_start to just before date line (or end of search area)
+    jia_xml_start = paragraphs[jia_start_idx][0]
+    if date_idx is not None:
+        replace_xml_end = paragraphs[date_idx][0]
+    else:
+        replace_xml_end = paragraphs[min(search_end - 1, n - 1)][1]
 
-        if current_data is None:
-            continue
-
-        new_value = None
-
-        if re.match(r'^[甲乙]方', label_norm):
-            new_value = current_data['name'] + sfx
-        elif re.match(r'^(代表人|負責人)', label_norm):
-            new_value = ' ' + current_data['person']
-        elif re.match(r'^(統一編號|身分證字號|統編)', label_norm):
-            new_value = current_data['id']
-        elif re.match(r'^(聯絡地址|地址)', label_norm):
-            new_value = current_data['address']
-        elif re.match(r'^聯絡電話', label_norm):
-            new_value = (current_data['contact']
-                         if current_data.get('contact_label') == '聯絡電話' else '')
-        elif re.match(r'^(電子郵件|信箱)', label_norm):
-            new_value = (current_data['contact']
-                         if current_data.get('contact_label') == '電子郵件' else '')
-
-        if new_value is not None:
-            to_replace.append((abs_i, label + new_value))
-
-    for abs_i, new_text in reversed(to_replace):
-        xml = _rebuild_party_para(xml, abs_i, list_paragraphs(xml), new_text, font)
-
-    return xml
+    return xml[:jia_xml_start] + new_xml + xml[replace_xml_end:]
 
 
 def replace_signature_section(xml: str, company: dict, font: str = '思源黑體') -> str:
