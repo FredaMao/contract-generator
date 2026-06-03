@@ -77,6 +77,10 @@ def _override_fonts(docx_bytes: bytes) -> bytes:
 
 
 def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
+    station_name = form_data.get('station_name', '').strip()
+    if not station_name:
+        raise ValueError('場站名稱為必填欄位')
+
     ctx = dict(form_data)
 
     for field in ('start_date', 'end_date', 'sign_date'):
@@ -113,7 +117,9 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     docx_bytes = _override_fonts(buf.getvalue())
 
     type_label = '租賃' if contract_type == 'rent' else '分潤'
-    addr = form_data.get('address', '').strip()[:12]
-    filename = f"{company_label}_{type_label}合約_{addr}.docx"
+    station_id = form_data.get('station_id', '').strip()
+    party_a = form_data.get('party_a', '').strip()
+    bracket = f"[{station_id}{station_name}]"
+    filename = f"{bracket}-{party_a}-{type_label}合約.docx"
 
     return docx_bytes, filename

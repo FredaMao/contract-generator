@@ -40,6 +40,8 @@ async def convert(file: UploadFile = File(...)):
 async def generate(
     company: str = Form(...),
     contract_type: str = Form(...),
+    station_id: str = Form(''),
+    station_name: str = Form(''),
     party_a: str = Form(''),
     owner: str = Form(''),
     id_number: str = Form(''),
@@ -66,6 +68,7 @@ async def generate(
     sales: str = Form(''),
 ):
     form_data = {
+        'station_id': station_id, 'station_name': station_name,
         'party_a': party_a, 'owner': owner, 'id_number': id_number,
         'phone': phone, 'contact_address': contact_address, 'a_email': a_email,
         'address': address, 'spots': spots, 'tax_type': tax_type,
