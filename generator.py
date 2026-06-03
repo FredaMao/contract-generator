@@ -45,7 +45,7 @@ def date_to_minguo(date_str: str) -> str:
         return ''
     try:
         y, m, d = date_str.split('-')
-        return f'民國{int(y) - 1911}年{int(m)}月{int(d)}日'
+        return f'{int(y) - 1911}年{int(m)}月{int(d)}日'
     except Exception:
         return date_str
 
@@ -78,6 +78,8 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
 
     for field in ('start_date', 'end_date', 'sign_date'):
         ctx[field] = date_to_minguo(ctx.get(field, ''))
+
+    ctx['email'] = ctx.get('a_email', '')
 
     if company_key == '悠勢':
         tpl_file = USPACE_TEMPLATES.get(contract_type)
