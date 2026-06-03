@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>合約轉換器｜悠勢科技</title>
+<title>合約系統｜悠勢科技</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -11,31 +11,60 @@ body {
     background: #f0f2f5;
     min-height: 100vh;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 20px;
+    padding: 32px 20px 48px;
 }
 .card {
     background: white;
     border-radius: 16px;
-    padding: 44px 40px;
+    padding: 36px 40px;
     width: 100%;
     max-width: 560px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    transition: max-width 0.25s ease;
 }
-.logo { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.logo img { width: 32px; height: 32px; object-fit: contain; }
-.logo span { font-size: 13px; color: #aaa; letter-spacing: 1px; }
-h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
-.tagline { font-size: 13px; color: #8a97a8; margin-bottom: 28px; }
+.card.wide { max-width: 720px; }
 
+.logo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.logo img { width: 28px; height: 28px; object-fit: contain; }
+.logo span { font-size: 12px; color: #aaa; letter-spacing: 1px; }
+h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
+
+/* Tabs */
+.tabs {
+    display: flex;
+    border-bottom: 2px solid #f0f2f5;
+    margin-bottom: 24px;
+    gap: 0;
+}
+.tab-btn {
+    padding: 9px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #8a97a8;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.5px;
+}
+.tab-btn:hover { color: #3b6fd4; }
+.tab-btn.active { color: #3b6fd4; border-bottom-color: #3b6fd4; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Convert tab ── */
 .flow {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-bottom: 28px;
-    padding: 12px 0;
+    margin-bottom: 24px;
+    padding: 10px 0;
     border-top: 1px solid #f0f2f5;
     border-bottom: 1px solid #f0f2f5;
 }
@@ -48,7 +77,6 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
     font-weight: 600;
 }
 .arrow { color: #c0cad8; font-size: 18px; }
-
 .drop-zone {
     border: 2px dashed #d0d8e4;
     border-radius: 10px;
@@ -59,43 +87,102 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
     background: #fafbfc;
     position: relative;
 }
-.drop-zone:hover, .drop-zone.over {
-    border-color: #3b6fd4;
-    background: #f0f4ff;
-}
-.drop-zone .icon { font-size: 40px; margin-bottom: 10px; display: block; }
+.drop-zone:hover, .drop-zone.over { border-color: #3b6fd4; background: #f0f4ff; }
+.drop-zone .icon { font-size: 38px; margin-bottom: 10px; display: block; }
 .drop-zone .main-text { font-size: 15px; color: #3d4d60; margin-bottom: 4px; }
 .drop-zone .sub-text { font-size: 12px; color: #a0adb8; }
 #file-input { display: none; }
-
 .file-selected {
-    margin-top: 14px;
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: #f0f4ff;
-    border-radius: 8px;
-    font-size: 13px;
-    color: #3b6fd4;
+    margin-top: 12px; display: none; align-items: center; gap: 10px;
+    padding: 10px 14px; background: #f0f4ff; border-radius: 8px;
+    font-size: 13px; color: #3b6fd4;
 }
 .file-selected .fname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-selected .remove {
-    margin-left: auto;
-    cursor: pointer;
-    color: #a0adb8;
-    font-size: 16px;
-    flex-shrink: 0;
-    border: none;
-    background: none;
-    padding: 0;
+    margin-left: auto; cursor: pointer; color: #a0adb8; font-size: 16px;
+    flex-shrink: 0; border: none; background: none; padding: 0;
 }
 .file-selected .remove:hover { color: #e74c3c; }
 
+/* ── Generate tab ── */
+.selector-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.selector-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #8a97a8;
+    min-width: 56px;
+    letter-spacing: 0.5px;
+}
+.sel-btn {
+    padding: 5px 14px;
+    border: 1.5px solid #d8e0ea;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #5a6a7a;
+    background: white;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+.sel-btn:hover { border-color: #3b6fd4; color: #3b6fd4; }
+.sel-btn.active { border-color: #3b6fd4; background: #eef4ff; color: #3b6fd4; }
+
+.gen-divider {
+    border: none;
+    border-top: 1px solid #f0f2f5;
+    margin: 18px 0;
+}
+.section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a0adb8;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+}
+.form-grid .span2 { grid-column: 1 / -1; }
+.f {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.f label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #7a8a9a;
+    letter-spacing: 0.3px;
+}
+.f input, .f select {
+    padding: 8px 10px;
+    border: 1.5px solid #d8e0ea;
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #1a2332;
+    outline: none;
+    transition: border-color 0.15s;
+    background: white;
+}
+.f input:focus, .f select:focus { border-color: #3b6fd4; }
+.f input::placeholder { color: #c0cad8; }
+
+/* Shared */
 .btn {
     width: 100%;
     margin-top: 16px;
-    padding: 14px;
+    padding: 13px;
     background: #3b6fd4;
     color: white;
     border: none;
@@ -109,10 +196,9 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
 }
 .btn:hover:not(:disabled) { background: #2d58b0; }
 .btn:disabled { background: #c8d3df; cursor: not-allowed; }
-
 .status {
-    margin-top: 14px;
-    padding: 12px 16px;
+    margin-top: 12px;
+    padding: 11px 14px;
     border-radius: 8px;
     font-size: 13px;
     display: none;
@@ -121,7 +207,6 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
 .status.loading { background: #eef4ff; color: #3b6fd4; }
 .status.success { background: #e8f8f0; color: #1a7a46; }
 .status.error   { background: #fdf0f0; color: #c0392b; }
-
 .spinner {
     display: inline-block;
     width: 12px; height: 12px;
@@ -135,8 +220,8 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .companies {
-    margin-top: 28px;
-    padding-top: 20px;
+    margin-top: 24px;
+    padding-top: 18px;
     border-top: 1px solid #f0f2f5;
     display: flex;
     justify-content: center;
@@ -150,63 +235,256 @@ h1 { font-size: 22px; color: #1a2332; margin-bottom: 4px; }
     padding: 3px 10px;
     border-radius: 12px;
 }
+
+.hidden { display: none !important; }
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card" id="card">
     <div class="logo">
         <img src="/static/logo.png" alt="悠勢科技 Logo">
         <span>悠勢科技股份有限公司</span>
     </div>
-    <h1>合約轉換器</h1>
-    <p class="tagline">對業主合約 → 對悠勢合約</p>
+    <h1>合約系統</h1>
 
-    <div class="flow">
-        <span class="pill">對業主合約</span>
-        <span class="arrow">→</span>
-        <span class="pill">對悠勢合約</span>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('convert', this)">合約轉換</button>
+        <button class="tab-btn" onclick="switchTab('generate', this)">產生新合約</button>
     </div>
 
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <span class="icon">📄</span>
-        <p class="main-text">點擊或拖曳上傳對業主合約</p>
-        <p class="sub-text">支援格式：.docx（分潤版 / 租金版）</p>
+    <!-- ── Tab 1: 合約轉換 ── -->
+    <div id="tab-convert" class="tab-content active">
+        <div class="flow">
+            <span class="pill">對業主合約</span>
+            <span class="arrow">→</span>
+            <span class="pill">對悠勢合約</span>
+        </div>
+
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <span class="icon">📄</span>
+            <p class="main-text">點擊或拖曳上傳對業主合約</p>
+            <p class="sub-text">支援格式：.docx（分潤版 / 租金版）</p>
+        </div>
+        <input type="file" id="file-input" accept=".docx">
+
+        <div class="file-selected" id="file-selected">
+            <span>📎</span>
+            <span class="fname" id="fname"></span>
+            <button class="remove" id="remove-btn" title="移除">✕</button>
+        </div>
+
+        <button class="btn" id="convert-btn" disabled onclick="doConvert()">產生對悠勢合約</button>
+        <div class="status" id="convert-status"></div>
+
+        <div class="companies">
+            <span class="co-tag">志昌資產管理</span>
+            <span class="co-tag">瀚昱開發</span>
+            <span class="co-tag">毅源開發</span>
+        </div>
     </div>
-    <input type="file" id="file-input" accept=".docx">
 
-    <div class="file-selected" id="file-selected">
-        <span>📎</span>
-        <span class="fname" id="fname"></span>
-        <button class="remove" id="remove-btn" title="移除">✕</button>
-    </div>
+    <!-- ── Tab 2: 產生新合約 ── -->
+    <div id="tab-generate" class="tab-content">
 
-    <button class="btn" id="convert-btn" disabled onclick="convert()">產生對悠勢合約</button>
+        <!-- 合約設定 -->
+        <div class="selector-row">
+            <span class="selector-label">管理公司</span>
+            <button class="sel-btn active" data-group="company" data-val="志昌" onclick="select(this)">志昌</button>
+            <button class="sel-btn" data-group="company" data-val="瀚昱" onclick="select(this)">瀚昱</button>
+            <button class="sel-btn" data-group="company" data-val="毅源" onclick="select(this)">毅源</button>
+        </div>
+        <div class="selector-row">
+            <span class="selector-label">合約類型</span>
+            <button class="sel-btn active" data-group="ctype" data-val="rent" onclick="select(this)">租賃型</button>
+            <button class="sel-btn" data-group="ctype" data-val="profit" onclick="select(this)">分潤型</button>
+        </div>
 
-    <div class="status" id="status"></div>
+        <hr class="gen-divider">
 
-    <div class="companies">
-        <span class="co-tag">志昌資產管理</span>
-        <span class="co-tag">瀚昱開發</span>
-        <span class="co-tag">毅源開發</span>
+        <!-- 停車場資料 -->
+        <div class="section-label">停車場資料</div>
+        <div class="form-grid">
+            <div class="f span2">
+                <label>停車場地址</label>
+                <input type="text" name="address" placeholder="例：臺北市中山區○○路1號">
+            </div>
+            <div class="f">
+                <label>車位數</label>
+                <input type="text" name="spots" placeholder="例：10">
+            </div>
+        </div>
+
+        <hr class="gen-divider">
+
+        <!-- 甲方 (業主) 資料 -->
+        <div class="section-label">甲方（業主）資料</div>
+        <div class="form-grid">
+            <div class="f span2">
+                <label>甲方名稱（公司名稱或姓名）</label>
+                <input type="text" name="party_a" placeholder="例：○○有限公司 或 王小明">
+            </div>
+            <div class="f">
+                <label>負責人</label>
+                <input type="text" name="owner" placeholder="">
+            </div>
+            <div class="f">
+                <label>統編 / 身分證字號</label>
+                <input type="text" name="id_number" placeholder="">
+            </div>
+            <div class="f">
+                <label>聯絡電話</label>
+                <input type="text" name="phone" placeholder="">
+            </div>
+            <div class="f rent-only">
+                <label>Email</label>
+                <input type="text" name="a_email" placeholder="">
+            </div>
+            <div class="f span2">
+                <label>聯絡地址</label>
+                <input type="text" name="contact_address" placeholder="">
+            </div>
+        </div>
+
+        <hr class="gen-divider">
+
+        <!-- 合約條件 -->
+        <div class="section-label">合約條件</div>
+        <div class="form-grid">
+
+            <!-- 租賃型 -->
+            <div class="f rent-only">
+                <label>月租金</label>
+                <input type="text" name="amount" placeholder="例：50,000">
+            </div>
+            <div class="f rent-only">
+                <label>最低保障收益</label>
+                <input type="text" name="low_rev" placeholder="例：45,000">
+            </div>
+            <div class="f rent-only">
+                <label>付款頻率</label>
+                <input type="text" name="pay_freq" placeholder="例：每月">
+            </div>
+            <div class="f rent-only">
+                <label>付款期間</label>
+                <input type="text" name="pay_period" placeholder="例：每月1日至5日">
+            </div>
+            <div class="f rent-only">
+                <label>付款日</label>
+                <input type="text" name="pay_day" placeholder="例：每月5日">
+            </div>
+            <div class="f rent-only">
+                <label>付款方式</label>
+                <input type="text" name="pay_method" placeholder="例：銀行轉帳">
+            </div>
+
+            <!-- 分潤型 -->
+            <div class="f profit-only hidden">
+                <label>甲方分潤比例（%）</label>
+                <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcB(this)">
+            </div>
+            <div class="f profit-only hidden">
+                <label>乙方分潤比例（%）</label>
+                <input type="text" name="party_b_percent" id="b-percent" placeholder="例：30">
+            </div>
+
+            <!-- 共用 -->
+            <div class="f">
+                <label>稅務</label>
+                <input type="text" name="tax_type" placeholder="例：含稅（含5%）">
+            </div>
+        </div>
+
+        <hr class="gen-divider">
+
+        <!-- 收款帳戶 -->
+        <div class="section-label">業主收款帳戶</div>
+        <div class="form-grid">
+            <div class="f span2">
+                <label>銀行名稱（含分行）</label>
+                <input type="text" name="bank_name" placeholder="例：國泰世華銀行 慶城分行">
+            </div>
+            <div class="f">
+                <label>帳戶名稱</label>
+                <input type="text" name="account_name" placeholder="">
+            </div>
+            <div class="f">
+                <label>帳號</label>
+                <input type="text" name="account_number" placeholder="">
+            </div>
+        </div>
+
+        <hr class="gen-divider">
+
+        <!-- 日期 -->
+        <div class="section-label">日期</div>
+        <div class="form-grid">
+            <div class="f">
+                <label>合約開始日</label>
+                <input type="date" name="start_date">
+            </div>
+            <div class="f">
+                <label>合約結束日</label>
+                <input type="date" name="end_date">
+            </div>
+            <div class="f">
+                <label>簽約日期</label>
+                <input type="date" name="sign_date">
+            </div>
+        </div>
+
+        <button class="btn" id="gen-btn" onclick="doGenerate()">產生合約</button>
+        <div class="status" id="gen-status"></div>
     </div>
 </div>
 
 <script>
+// ── Tab switching ──
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    document.getElementById('card').classList.toggle('wide', name === 'generate');
+}
+
+// ── Selector pills ──
+let selected = { company: '志昌', ctype: 'rent' };
+
+function select(btn) {
+    const group = btn.dataset.group;
+    document.querySelectorAll(`.sel-btn[data-group="${group}"]`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selected[group] = btn.dataset.val;
+    updateTypeFields();
+}
+
+function updateTypeFields() {
+    const isRent = selected.ctype === 'rent';
+    document.querySelectorAll('.rent-only').forEach(el => el.classList.toggle('hidden', !isRent));
+    document.querySelectorAll('.profit-only').forEach(el => el.classList.toggle('hidden', isRent));
+}
+
+// Auto-calc 乙方% = 100 - 甲方%
+function calcB(input) {
+    const a = parseFloat(input.value);
+    const bEl = document.getElementById('b-percent');
+    if (!isNaN(a) && a >= 0 && a <= 100) {
+        bEl.value = (100 - a).toString();
+    } else {
+        bEl.value = '';
+    }
+}
+
+// ── Convert tab ──
 let selectedFile = null;
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-const fileSelected = document.getElementById('file-selected');
-const fname = document.getElementById('fname');
+const fileSelectedEl = document.getElementById('file-selected');
+const fnameEl = document.getElementById('fname');
 const convertBtn = document.getElementById('convert-btn');
-const statusEl = document.getElementById('status');
 
 fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
-
-document.getElementById('remove-btn').addEventListener('click', e => {
-    e.stopPropagation();
-    clearFile();
-});
-
+document.getElementById('remove-btn').addEventListener('click', e => { e.stopPropagation(); clearFile(); });
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
 dropZone.addEventListener('drop', e => {
@@ -217,63 +495,97 @@ dropZone.addEventListener('drop', e => {
 
 function setFile(file) {
     if (!file.name.toLowerCase().endsWith('.docx')) {
-        showStatus('請上傳 .docx 格式的檔案', 'error'); return;
+        showStatus('convert-status', '請上傳 .docx 格式的檔案', 'error'); return;
     }
     selectedFile = file;
-    fname.textContent = file.name;
-    fileSelected.style.display = 'flex';
+    fnameEl.textContent = file.name;
+    fileSelectedEl.style.display = 'flex';
     convertBtn.disabled = false;
-    statusEl.style.display = 'none';
+    document.getElementById('convert-status').style.display = 'none';
 }
 
 function clearFile() {
     selectedFile = null;
     fileInput.value = '';
-    fileSelected.style.display = 'none';
+    fileSelectedEl.style.display = 'none';
     convertBtn.disabled = true;
-    statusEl.style.display = 'none';
+    document.getElementById('convert-status').style.display = 'none';
 }
 
-async function convert() {
+async function doConvert() {
     if (!selectedFile) return;
     convertBtn.disabled = true;
-    showStatus('<span class="spinner"></span>轉換中，請稍候…', 'loading');
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
+    showStatus('convert-status', '<span class="spinner"></span>轉換中，請稍候…', 'loading');
+    const fd = new FormData();
+    fd.append('file', selectedFile);
     try {
-        const res = await fetch('/convert', { method: 'POST', body: formData });
-
+        const res = await fetch('/convert', { method: 'POST', body: fd });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: '未知錯誤' }));
-            showStatus('✗ ' + err.detail, 'error');
-            convertBtn.disabled = false;
-            return;
+            showStatus('convert-status', '✗ ' + err.detail, 'error');
+        } else {
+            const blob = await res.blob();
+            const disp = res.headers.get('Content-Disposition') || '';
+            let name = '對悠勢合約.docx';
+            const m = disp.match(/filename\*=UTF-8''(.+)/i);
+            if (m) name = decodeURIComponent(m[1]);
+            downloadBlob(blob, name);
+            showStatus('convert-status', `✓ 轉換完成！已下載：${name}`, 'success');
         }
-
-        const blob = await res.blob();
-        const disposition = res.headers.get('Content-Disposition') || '';
-        let outName = '對悠勢合約.docx';
-        const m = disposition.match(/filename\*=UTF-8''(.+)/i);
-        if (m) outName = decodeURIComponent(m[1]);
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = outName; a.click();
-        URL.revokeObjectURL(url);
-
-        showStatus(`✓ 轉換完成！已下載：${outName}`, 'success');
     } catch (e) {
-        showStatus('✗ 網路錯誤：' + e.message, 'error');
+        showStatus('convert-status', '✗ 網路錯誤：' + e.message, 'error');
     }
     convertBtn.disabled = false;
 }
 
-function showStatus(html, type) {
-    statusEl.innerHTML = html;
-    statusEl.className = 'status ' + type;
-    statusEl.style.display = 'block';
+// ── Generate tab ──
+async function doGenerate() {
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = true;
+    showStatus('gen-status', '<span class="spinner"></span>產生中，請稍候…', 'loading');
+
+    const fd = new FormData();
+    fd.append('company', selected.company);
+    fd.append('contract_type', selected.ctype);
+
+    // Collect all named inputs inside generate tab
+    document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(el => {
+        fd.append(el.name, el.value);
+    });
+
+    try {
+        const res = await fetch('/generate', { method: 'POST', body: fd });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: '未知錯誤' }));
+            showStatus('gen-status', '✗ ' + err.detail, 'error');
+        } else {
+            const blob = await res.blob();
+            const disp = res.headers.get('Content-Disposition') || '';
+            let name = '新合約.docx';
+            const m = disp.match(/filename\*=UTF-8''(.+)/i);
+            if (m) name = decodeURIComponent(m[1]);
+            downloadBlob(blob, name);
+            showStatus('gen-status', `✓ 產生完成！已下載：${name}`, 'success');
+        }
+    } catch (e) {
+        showStatus('gen-status', '✗ 網路錯誤：' + e.message, 'error');
+    }
+    btn.disabled = false;
+}
+
+// ── Helpers ──
+function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+}
+
+function showStatus(id, html, type) {
+    const el = document.getElementById(id);
+    el.innerHTML = html;
+    el.className = 'status ' + type;
+    el.style.display = 'block';
 }
 </script>
 </body>
