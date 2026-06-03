@@ -116,10 +116,10 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     tpl.save(buf)
     docx_bytes = _override_fonts(buf.getvalue())
 
-    type_label = '租賃' if contract_type == 'rent' else '分潤'
+    contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
     station_id = form_data.get('station_id', '').strip()
     party_a = form_data.get('party_a', '').strip()
     bracket = f"[{station_id}{station_name}]"
-    filename = f"{bracket}-{party_a}-{type_label}合約.docx"
+    filename = f"{bracket}-{party_a}-{contract_title}.docx"
 
     return docx_bytes, filename
