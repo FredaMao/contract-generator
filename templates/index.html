@@ -235,12 +235,12 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
         <div class="section-label">停車場資料</div>
         <div class="form-grid">
             <div class="f">
-                <label>場站編號</label>
-                <input type="text" name="station_id" placeholder="例：A001">
+                <label>建物編號</label>
+                <input type="text" name="building_id" placeholder="例：A001">
             </div>
             <div class="f">
-                <label>場站名稱 *</label>
-                <input type="text" name="station_name" placeholder="例：信義停車場" required>
+                <label>建物名稱 *</label>
+                <input type="text" name="building_name" placeholder="例：信義停車場" required>
             </div>
             <div class="f span2">
                 <label>停車場地址</label>
@@ -249,6 +249,18 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <div class="f">
                 <label>車位數</label>
                 <input type="text" name="spots" placeholder="例：10">
+            </div>
+            <div class="f">
+                <label>建物綁定電話</label>
+                <input type="text" name="building_phone" placeholder="例：02-2345-6789">
+            </div>
+            <div class="f">
+                <label>所得代號</label>
+                <input type="text" name="income_code" placeholder="例：54">
+            </div>
+            <div class="f">
+                <label>業務人員</label>
+                <input type="text" name="sales" placeholder="">
             </div>
         </div>
 
@@ -280,11 +292,6 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <div class="f span2">
                 <label>聯絡地址</label>
                 <input type="text" name="contact_address" placeholder="">
-            </div>
-            <!-- 悠勢直簽專用 -->
-            <div class="f uspace-only hidden">
-                <label>業務人員</label>
-                <input type="text" name="sales" placeholder="">
             </div>
         </div>
 

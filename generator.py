@@ -77,9 +77,9 @@ def _override_fonts(docx_bytes: bytes) -> bytes:
 
 
 def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
-    station_name = form_data.get('station_name', '').strip()
-    if not station_name:
-        raise ValueError('場站名稱為必填欄位')
+    building_name = form_data.get('building_name', '').strip()
+    if not building_name:
+        raise ValueError('建物名稱為必填欄位')
 
     ctx = dict(form_data)
 
@@ -87,6 +87,15 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
         ctx[field] = date_to_minguo(ctx.get(field, ''))
 
     ctx['email'] = ctx.get('a_email', '')
+
+    contract_prefix = '分潤' if contract_type == 'profit' else '租賃'
+    tax_str = form_data.get('tax_type', '')
+    ctx['contract_tax_label'] = f"{contract_prefix}{tax_str}/手續費內含"
+    ctx['building_id'] = form_data.get('building_id', '').strip()
+    ctx['building_name'] = building_name
+    ctx['building_phone'] = form_data.get('building_phone', '').strip()
+    ctx['income_code'] = form_data.get('income_code', '').strip()
+    ctx['sales'] = form_data.get('sales', '').strip()
 
     if company_key == '悠勢':
         tpl_file = USPACE_TEMPLATES.get(contract_type)
@@ -117,9 +126,9 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     docx_bytes = _override_fonts(buf.getvalue())
 
     contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
-    station_id = form_data.get('station_id', '').strip()
+    building_id = ctx['building_id']
     party_a = form_data.get('party_a', '').strip()
-    bracket = f"[{station_id}{station_name}]"
+    bracket = f"[{building_id}{building_name}]"
     filename = f"{bracket}-{party_a}-{contract_title}.docx"
 
     return docx_bytes, filename
