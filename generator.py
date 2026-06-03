@@ -56,7 +56,10 @@ def _rfonts_replacement(_m: re.Match) -> str:
 
 
 def _apply_font_xml(xml: str) -> str:
-    return re.sub(r'<w:rFonts\b.*?/>', _rfonts_replacement, xml, flags=re.DOTALL)
+    xml = re.sub(r'<w:rFonts\b.*?/>', _rfonts_replacement, xml, flags=re.DOTALL)
+    xml = re.sub(r'<w:highlight\b[^/]*/>', '', xml)
+    xml = re.sub(r'<w:shd\b[^/]*/>', '', xml, flags=re.DOTALL)
+    return xml
 
 
 def _override_fonts(docx_bytes: bytes) -> bytes:
