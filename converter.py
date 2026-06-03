@@ -362,7 +362,7 @@ def update_bottom_sig_in_place(xml: str, company: dict, sig_idx: int,
         elif re.match(r'^聯絡電話', label_norm):
             new_value = (current_data['contact']
                          if current_data.get('contact_label') == '聯絡電話' else '')
-        elif re.match(r'^電子郵件', label_norm):
+        elif re.match(r'^(電子郵件|信箱)', label_norm):
             new_value = (current_data['contact']
                          if current_data.get('contact_label') == '電子郵件' else '')
 
