@@ -36,7 +36,6 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
     display: flex;
     border-bottom: 2px solid #f0f2f5;
     margin-bottom: 24px;
-    gap: 0;
 }
 .tab-btn {
     padding: 9px 20px;
@@ -68,14 +67,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
     border-top: 1px solid #f0f2f5;
     border-bottom: 1px solid #f0f2f5;
 }
-.pill {
-    background: #eef4ff;
-    color: #3b6fd4;
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-}
+.pill { background: #eef4ff; color: #3b6fd4; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
 .arrow { color: #c0cad8; font-size: 18px; }
 .drop-zone {
     border: 2px dashed #d0d8e4;
@@ -85,7 +77,6 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
     cursor: pointer;
     transition: all 0.2s;
     background: #fafbfc;
-    position: relative;
 }
 .drop-zone:hover, .drop-zone.over { border-color: #3b6fd4; background: #f0f4ff; }
 .drop-zone .icon { font-size: 38px; margin-bottom: 10px; display: block; }
@@ -105,20 +96,8 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 .file-selected .remove:hover { color: #e74c3c; }
 
 /* ── Generate tab ── */
-.selector-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-.selector-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: #8a97a8;
-    min-width: 56px;
-    letter-spacing: 0.5px;
-}
+.selector-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.selector-label { font-size: 12px; font-weight: 700; color: #8a97a8; min-width: 56px; letter-spacing: 0.5px; }
 .sel-btn {
     padding: 5px 14px;
     border: 1.5px solid #d8e0ea;
@@ -134,36 +113,12 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 .sel-btn:hover { border-color: #3b6fd4; color: #3b6fd4; }
 .sel-btn.active { border-color: #3b6fd4; background: #eef4ff; color: #3b6fd4; }
 
-.gen-divider {
-    border: none;
-    border-top: 1px solid #f0f2f5;
-    margin: 18px 0;
-}
-.section-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #a0adb8;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-}
-.form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 14px;
-}
+.gen-divider { border: none; border-top: 1px solid #f0f2f5; margin: 16px 0; }
+.section-label { font-size: 11px; font-weight: 700; color: #a0adb8; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .form-grid .span2 { grid-column: 1 / -1; }
-.f {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.f label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #7a8a9a;
-    letter-spacing: 0.3px;
-}
+.f { display: flex; flex-direction: column; gap: 4px; }
+.f label { font-size: 11px; font-weight: 700; color: #7a8a9a; letter-spacing: 0.3px; }
 .f input, .f select {
     padding: 8px 10px;
     border: 1.5px solid #d8e0ea;
@@ -177,6 +132,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 }
 .f input:focus, .f select:focus { border-color: #3b6fd4; }
 .f input::placeholder { color: #c0cad8; }
+.f input[readonly] { background: #f5f7fa; color: #7a8a9a; cursor: default; }
 
 /* Shared */
 .btn {
@@ -196,46 +152,23 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 }
 .btn:hover:not(:disabled) { background: #2d58b0; }
 .btn:disabled { background: #c8d3df; cursor: not-allowed; }
-.status {
-    margin-top: 12px;
-    padding: 11px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    display: none;
-    line-height: 1.5;
-}
+.status { margin-top: 12px; padding: 11px 14px; border-radius: 8px; font-size: 13px; display: none; line-height: 1.5; }
 .status.loading { background: #eef4ff; color: #3b6fd4; }
 .status.success { background: #e8f8f0; color: #1a7a46; }
 .status.error   { background: #fdf0f0; color: #c0392b; }
 .spinner {
-    display: inline-block;
-    width: 12px; height: 12px;
-    border: 2px solid #3b6fd4;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    margin-right: 6px;
-    vertical-align: middle;
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid #3b6fd4; border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    margin-right: 6px; vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .companies {
-    margin-top: 24px;
-    padding-top: 18px;
-    border-top: 1px solid #f0f2f5;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    margin-top: 24px; padding-top: 18px; border-top: 1px solid #f0f2f5;
+    display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;
 }
-.co-tag {
-    font-size: 11px;
-    color: #a0adb8;
-    background: #f5f7fa;
-    padding: 3px 10px;
-    border-radius: 12px;
-}
-
+.co-tag { font-size: 11px; color: #a0adb8; background: #f5f7fa; padding: 3px 10px; border-radius: 12px; }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -259,23 +192,19 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <span class="arrow">→</span>
             <span class="pill">對悠勢合約</span>
         </div>
-
         <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
             <span class="icon">📄</span>
             <p class="main-text">點擊或拖曳上傳對業主合約</p>
             <p class="sub-text">支援格式：.docx（分潤版 / 租金版）</p>
         </div>
         <input type="file" id="file-input" accept=".docx">
-
         <div class="file-selected" id="file-selected">
             <span>📎</span>
             <span class="fname" id="fname"></span>
             <button class="remove" id="remove-btn" title="移除">✕</button>
         </div>
-
         <button class="btn" id="convert-btn" disabled onclick="doConvert()">產生對悠勢合約</button>
         <div class="status" id="convert-status"></div>
-
         <div class="companies">
             <span class="co-tag">志昌資產管理</span>
             <span class="co-tag">瀚昱開發</span>
@@ -289,14 +218,15 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
         <!-- 合約設定 -->
         <div class="selector-row">
             <span class="selector-label">管理公司</span>
-            <button class="sel-btn active" data-group="company" data-val="志昌" onclick="select(this)">志昌</button>
-            <button class="sel-btn" data-group="company" data-val="瀚昱" onclick="select(this)">瀚昱</button>
-            <button class="sel-btn" data-group="company" data-val="毅源" onclick="select(this)">毅源</button>
+            <button class="sel-btn active" data-group="company" data-val="志昌" onclick="pickSel(this)">志昌</button>
+            <button class="sel-btn" data-group="company" data-val="瀚昱" onclick="pickSel(this)">瀚昱</button>
+            <button class="sel-btn" data-group="company" data-val="毅源" onclick="pickSel(this)">毅源</button>
+            <button class="sel-btn" data-group="company" data-val="悠勢" onclick="pickSel(this)">悠勢</button>
         </div>
         <div class="selector-row">
             <span class="selector-label">合約類型</span>
-            <button class="sel-btn active" data-group="ctype" data-val="rent" onclick="select(this)">租賃型</button>
-            <button class="sel-btn" data-group="ctype" data-val="profit" onclick="select(this)">分潤型</button>
+            <button class="sel-btn active" data-group="ctype" data-val="rent" onclick="pickSel(this)">租賃型</button>
+            <button class="sel-btn" data-group="ctype" data-val="profit" onclick="pickSel(this)">分潤型</button>
         </div>
 
         <hr class="gen-divider">
@@ -316,7 +246,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
         <hr class="gen-divider">
 
-        <!-- 甲方 (業主) 資料 -->
+        <!-- 甲方（業主）資料 -->
         <div class="section-label">甲方（業主）資料</div>
         <div class="form-grid">
             <div class="f span2">
@@ -335,13 +265,18 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <label>聯絡電話</label>
                 <input type="text" name="phone" placeholder="">
             </div>
-            <div class="f rent-only">
+            <div class="f">
                 <label>Email</label>
                 <input type="text" name="a_email" placeholder="">
             </div>
             <div class="f span2">
                 <label>聯絡地址</label>
                 <input type="text" name="contact_address" placeholder="">
+            </div>
+            <!-- 悠勢直簽專用 -->
+            <div class="f uspace-only hidden">
+                <label>業務人員</label>
+                <input type="text" name="sales" placeholder="">
             </div>
         </div>
 
@@ -362,11 +297,17 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             </div>
             <div class="f rent-only">
                 <label>付款頻率</label>
-                <input type="text" name="pay_freq" placeholder="例：每月">
+                <select name="pay_freq" onchange="onPayFreqChange(this)">
+                    <option value="">請選擇</option>
+                    <option value="月繳">月繳</option>
+                    <option value="季繳">季繳</option>
+                    <option value="半年繳">半年繳</option>
+                    <option value="年繳">年繳</option>
+                </select>
             </div>
             <div class="f rent-only">
-                <label>付款期間</label>
-                <input type="text" name="pay_period" placeholder="例：每月1日至5日">
+                <label>付款期間（月數，自動填入）</label>
+                <input type="text" name="pay_period" id="pay-period" readonly placeholder="依付款頻率自動填入">
             </div>
             <div class="f rent-only">
                 <label>付款日</label>
@@ -374,13 +315,17 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             </div>
             <div class="f rent-only">
                 <label>付款方式</label>
-                <input type="text" name="pay_method" placeholder="例：銀行轉帳">
+                <select name="pay_method">
+                    <option value="">請選擇</option>
+                    <option value="匯款">匯款</option>
+                    <option value="支票">支票</option>
+                </select>
             </div>
 
             <!-- 分潤型 -->
             <div class="f profit-only hidden">
                 <label>甲方分潤比例（%）</label>
-                <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcB(this)">
+                <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcPartyB(this)">
             </div>
             <div class="f profit-only hidden">
                 <label>乙方分潤比例（%）</label>
@@ -390,7 +335,11 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <!-- 共用 -->
             <div class="f">
                 <label>稅務</label>
-                <input type="text" name="tax_type" placeholder="例：含稅（含5%）">
+                <select name="tax_type">
+                    <option value="">請選擇</option>
+                    <option value="稅前">稅前</option>
+                    <option value="稅後">稅後</option>
+                </select>
             </div>
         </div>
 
@@ -448,46 +397,51 @@ function switchTab(name, btn) {
 }
 
 // ── Selector pills ──
-let selected = { company: '志昌', ctype: 'rent' };
+var selected = { company: '志昌', ctype: 'rent' };
 
-function select(btn) {
-    const group = btn.dataset.group;
-    document.querySelectorAll(`.sel-btn[data-group="${group}"]`).forEach(b => b.classList.remove('active'));
+function pickSel(btn) {
+    var group = btn.dataset.group;
+    document.querySelectorAll('.sel-btn[data-group="' + group + '"]').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     selected[group] = btn.dataset.val;
-    updateTypeFields();
+    updateFields();
 }
 
-function updateTypeFields() {
-    const isRent = selected.ctype === 'rent';
-    document.querySelectorAll('.rent-only').forEach(el => el.classList.toggle('hidden', !isRent));
-    document.querySelectorAll('.profit-only').forEach(el => el.classList.toggle('hidden', isRent));
+function updateFields() {
+    var isRent = selected.ctype === 'rent';
+    var isUspace = selected.company === '悠勢';
+    document.querySelectorAll('.rent-only').forEach(function(el) { el.classList.toggle('hidden', !isRent); });
+    document.querySelectorAll('.profit-only').forEach(function(el) { el.classList.toggle('hidden', isRent); });
+    document.querySelectorAll('.uspace-only').forEach(function(el) { el.classList.toggle('hidden', !isUspace); });
+}
+
+// Auto-fill pay_period from pay_freq
+var freqPeriodMap = { '月繳': '1', '季繳': '3', '半年繳': '6', '年繳': '12' };
+function onPayFreqChange(sel) {
+    var el = document.getElementById('pay-period');
+    el.value = freqPeriodMap[sel.value] || '';
 }
 
 // Auto-calc 乙方% = 100 - 甲方%
-function calcB(input) {
-    const a = parseFloat(input.value);
-    const bEl = document.getElementById('b-percent');
-    if (!isNaN(a) && a >= 0 && a <= 100) {
-        bEl.value = (100 - a).toString();
-    } else {
-        bEl.value = '';
-    }
+function calcPartyB(input) {
+    var a = parseFloat(input.value);
+    var el = document.getElementById('b-percent');
+    el.value = (!isNaN(a) && a >= 0 && a <= 100) ? (100 - a).toString() : '';
 }
 
 // ── Convert tab ──
-let selectedFile = null;
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const fileSelectedEl = document.getElementById('file-selected');
-const fnameEl = document.getElementById('fname');
-const convertBtn = document.getElementById('convert-btn');
+var selectedFile = null;
+var dropZone = document.getElementById('drop-zone');
+var fileInput = document.getElementById('file-input');
+var fileSelectedEl = document.getElementById('file-selected');
+var fnameEl = document.getElementById('fname');
+var convertBtn = document.getElementById('convert-btn');
 
-fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
-document.getElementById('remove-btn').addEventListener('click', e => { e.stopPropagation(); clearFile(); });
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-dropZone.addEventListener('drop', e => {
+fileInput.addEventListener('change', function(e) { if (e.target.files[0]) setFile(e.target.files[0]); });
+document.getElementById('remove-btn').addEventListener('click', function(e) { e.stopPropagation(); clearFile(); });
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('over'); });
+dropZone.addEventListener('drop', function(e) {
     e.preventDefault();
     dropZone.classList.remove('over');
     if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
@@ -516,21 +470,21 @@ async function doConvert() {
     if (!selectedFile) return;
     convertBtn.disabled = true;
     showStatus('convert-status', '<span class="spinner"></span>轉換中，請稍候…', 'loading');
-    const fd = new FormData();
+    var fd = new FormData();
     fd.append('file', selectedFile);
     try {
-        const res = await fetch('/convert', { method: 'POST', body: fd });
+        var res = await fetch('/convert', { method: 'POST', body: fd });
         if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: '未知錯誤' }));
+            var err = await res.json().catch(function() { return { detail: '未知錯誤' }; });
             showStatus('convert-status', '✗ ' + err.detail, 'error');
         } else {
-            const blob = await res.blob();
-            const disp = res.headers.get('Content-Disposition') || '';
-            let name = '對悠勢合約.docx';
-            const m = disp.match(/filename\*=UTF-8''(.+)/i);
+            var blob = await res.blob();
+            var disp = res.headers.get('Content-Disposition') || '';
+            var name = '對悠勢合約.docx';
+            var m = disp.match(/filename\*=UTF-8''(.+)/i);
             if (m) name = decodeURIComponent(m[1]);
             downloadBlob(blob, name);
-            showStatus('convert-status', `✓ 轉換完成！已下載：${name}`, 'success');
+            showStatus('convert-status', '✓ 轉換完成！已下載：' + name, 'success');
         }
     } catch (e) {
         showStatus('convert-status', '✗ 網路錯誤：' + e.message, 'error');
@@ -540,32 +494,30 @@ async function doConvert() {
 
 // ── Generate tab ──
 async function doGenerate() {
-    const btn = document.getElementById('gen-btn');
+    var btn = document.getElementById('gen-btn');
     btn.disabled = true;
     showStatus('gen-status', '<span class="spinner"></span>產生中，請稍候…', 'loading');
 
-    const fd = new FormData();
+    var fd = new FormData();
     fd.append('company', selected.company);
     fd.append('contract_type', selected.ctype);
-
-    // Collect all named inputs inside generate tab
-    document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(el => {
+    document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(function(el) {
         fd.append(el.name, el.value);
     });
 
     try {
-        const res = await fetch('/generate', { method: 'POST', body: fd });
+        var res = await fetch('/generate', { method: 'POST', body: fd });
         if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: '未知錯誤' }));
+            var err = await res.json().catch(function() { return { detail: '未知錯誤' }; });
             showStatus('gen-status', '✗ ' + err.detail, 'error');
         } else {
-            const blob = await res.blob();
-            const disp = res.headers.get('Content-Disposition') || '';
-            let name = '新合約.docx';
-            const m = disp.match(/filename\*=UTF-8''(.+)/i);
+            var blob = await res.blob();
+            var disp = res.headers.get('Content-Disposition') || '';
+            var name = '新合約.docx';
+            var m = disp.match(/filename\*=UTF-8''(.+)/i);
             if (m) name = decodeURIComponent(m[1]);
             downloadBlob(blob, name);
-            showStatus('gen-status', `✓ 產生完成！已下載：${name}`, 'success');
+            showStatus('gen-status', '✓ 產生完成！已下載：' + name, 'success');
         }
     } catch (e) {
         showStatus('gen-status', '✗ 網路錯誤：' + e.message, 'error');
@@ -575,14 +527,14 @@ async function doGenerate() {
 
 // ── Helpers ──
 function downloadBlob(blob, name) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
     a.href = url; a.download = name; a.click();
     URL.revokeObjectURL(url);
 }
 
 function showStatus(id, html, type) {
-    const el = document.getElementById(id);
+    var el = document.getElementById(id);
     el.innerHTML = html;
     el.className = 'status ' + type;
     el.style.display = 'block';

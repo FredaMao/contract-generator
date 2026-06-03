@@ -1,6 +1,10 @@
 import io
 import os
+import re
+import zipfile
 from docxtpl import DocxTemplate
+
+FONT = '微軟正黑體'
 
 COMPANIES = {
     '志昌': {
@@ -29,39 +33,82 @@ COMPANIES = {
     },
 }
 
+COMPANY_TEMPLATES = {'rent': 'template_rent.docx', 'profit': 'template_profit.docx'}
+USPACE_TEMPLATES = {'rent': 'template_rent_uspace.docx', 'profit': 'template_profit_uspace.docx'}
+
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
 
 
-def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
-    co = COMPANIES.get(company_key)
-    if not co:
-        raise ValueError(f'未知的公司：{company_key}')
+def date_to_minguo(date_str: str) -> str:
+    """Convert YYYY-MM-DD to 民國YYY年M月D日"""
+    if not date_str:
+        return ''
+    try:
+        y, m, d = date_str.split('-')
+        return f'民國{int(y) - 1911}年{int(m)}月{int(d)}日'
+    except Exception:
+        return date_str
 
-    if contract_type == 'rent':
-        tpl_file = 'template_rent.docx'
-    elif contract_type == 'profit':
-        tpl_file = 'template_profit.docx'
+
+def _rfonts_replacement(_m: re.Match) -> str:
+    return (f'<w:rFonts w:ascii="{FONT}" w:eastAsia="{FONT}" '
+            f'w:hAnsi="{FONT}" w:cs="{FONT}"/>')
+
+
+def _apply_font_xml(xml: str) -> str:
+    return re.sub(r'<w:rFonts\b.*?/>', _rfonts_replacement, xml, flags=re.DOTALL)
+
+
+def _override_fonts(docx_bytes: bytes) -> bytes:
+    in_buf = io.BytesIO(docx_bytes)
+    out_buf = io.BytesIO()
+    targets = {'word/document.xml', 'word/styles.xml'}
+    with zipfile.ZipFile(in_buf) as zin:
+        with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename in targets:
+                    data = _apply_font_xml(data.decode('utf-8')).encode('utf-8')
+                zout.writestr(item, data)
+    return out_buf.getvalue()
+
+
+def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
+    ctx = dict(form_data)
+
+    for field in ('start_date', 'end_date', 'sign_date'):
+        ctx[field] = date_to_minguo(ctx.get(field, ''))
+
+    if company_key == '悠勢':
+        tpl_file = USPACE_TEMPLATES.get(contract_type)
+        if not tpl_file:
+            raise ValueError(f'未知的合約類型：{contract_type}')
+        ctx['email'] = ctx.get('a_email', '')
+        company_label = '悠勢科技'
     else:
-        raise ValueError(f'未知的合約類型：{contract_type}')
+        co = COMPANIES.get(company_key)
+        if not co:
+            raise ValueError(f'未知的公司：{company_key}')
+        tpl_file = COMPANY_TEMPLATES.get(contract_type)
+        if not tpl_file:
+            raise ValueError(f'未知的合約類型：{contract_type}')
+        ctx['party_b'] = co['name']
+        ctx['b_owner'] = co['owner']
+        ctx['b_id'] = co['id']
+        ctx['b_phone'] = co['phone']
+        ctx['b_address'] = co['address']
+        ctx['b_email'] = co['email']
+        company_label = co['name']
 
     tpl = DocxTemplate(os.path.join(TEMPLATE_DIR, tpl_file))
-
-    ctx = dict(form_data)
-    # Auto-fill 乙方 (management company) fields from company profile
-    ctx['party_b'] = co['name']
-    ctx['b_owner'] = co['owner']
-    ctx['b_id'] = co['id']
-    ctx['b_phone'] = co['phone']
-    ctx['b_address'] = co['address']
-    ctx['b_email'] = co['email']
-
     tpl.render(ctx)
 
     buf = io.BytesIO()
     tpl.save(buf)
+    docx_bytes = _override_fonts(buf.getvalue())
 
     type_label = '租賃' if contract_type == 'rent' else '分潤'
     addr = form_data.get('address', '').strip()[:12]
-    filename = f"{co['name']}_{type_label}合約_{addr}.docx"
+    filename = f"{company_label}_{type_label}合約_{addr}.docx"
 
-    return buf.getvalue(), filename
+    return docx_bytes, filename

@@ -63,6 +63,7 @@ async def generate(
     pay_method: str = Form(''),
     party_a_percent: str = Form(''),
     party_b_percent: str = Form(''),
+    sales: str = Form(''),
 ):
     form_data = {
         'party_a': party_a, 'owner': owner, 'id_number': id_number,
@@ -74,6 +75,7 @@ async def generate(
         'pay_freq': pay_freq, 'pay_period': pay_period,
         'pay_day': pay_day, 'pay_method': pay_method,
         'party_a_percent': party_a_percent, 'party_b_percent': party_b_percent,
+        'sales': sales,
     }
     try:
         output_bytes, filename = generate_contract(company, contract_type, form_data)
