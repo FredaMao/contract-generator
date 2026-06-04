@@ -514,13 +514,16 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
 
     # Patterns allow parenthetical annotations between label and colon,
     # e.g. "乙方（承租人）：" or "甲方（出租人）："
+    # Also handle suffix format: "服務提供方：公司名稱（下稱「乙方」）"
     _COLON_PART = r'[^：:\n]{0,30}[：:]'
     yi_pat = re.compile(r'(?:乙[　\s]*方|承租人)' + _COLON_PART)
+    yi_suffix_pat = re.compile(r'[「（(]乙[　\s]*方[」）)]')
     jia_pat = re.compile(r'(?:甲[　\s]*方|出租人)' + _COLON_PART)
+    jia_suffix_pat = re.compile(r'[「（(]甲[　\s]*方[」）)]')
 
     # Find 乙方 paragraph containing the company name (search up to 50 paragraphs)
     for i, (_, _, text) in enumerate(paragraphs[:50]):
-        if company_name in text and yi_pat.search(text):
+        if company_name in text and (yi_pat.search(text) or yi_suffix_pat.search(text)):
             yi_idx = i
             break
 
@@ -530,7 +533,7 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
     # Find 甲方 paragraph: scan up to 20 paragraphs before yi_idx
     for i in range(yi_idx - 1, max(-1, yi_idx - 20), -1):
         _, _, text = paragraphs[i]
-        if jia_pat.search(text.strip()):
+        if jia_pat.search(text.strip()) or jia_suffix_pat.search(text.strip()):
             jia_idx = i
             break
 
