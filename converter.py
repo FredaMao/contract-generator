@@ -651,6 +651,29 @@ def fill_bank_account(xml: str, company: dict) -> str:
     return xml
 
 
+def _fix_income_code_for_uspace(xml: str) -> str:
+    """Force income code checkboxes to 法人 00發票 (all others unchecked)."""
+    paragraphs = list_paragraphs(xml)
+    replacements = []
+    for ps, pe, text in paragraphs:
+        if '■' not in text and '□' not in text:
+            continue
+        para_xml = xml[ps:pe]
+        if '個人' in text and ('51L' in text or '51J' in text):
+            new_para = para_xml.replace('■', '□')
+        elif '法人' in text and '00' in text:
+            new_para = para_xml.replace('□', '■')
+        elif '管委會' in text:
+            new_para = para_xml.replace('■', '□')
+        else:
+            continue
+        if new_para != para_xml:
+            replacements.append((ps, pe, new_para))
+    for ps, pe, new_para in sorted(replacements, key=lambda x: x[0], reverse=True):
+        xml = xml[:ps] + new_para + xml[pe:]
+    return xml
+
+
 def validate_xml(xml_str: str) -> None:
     """Raise ValueError if XML is not well-formed."""
     try:
@@ -677,8 +700,7 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
     company_name = detect_company(plain)
     if not company_name:
         raise ValueError('無法識別合約中的公司（志昌／瀚昱／毅源），請確認上傳的是對業主合約')
-    if not income_code:
-        income_code = detect_income_code(plain)
+    income_code = '00發票'
 
     company = COMPANIES[company_name]
 
@@ -686,6 +708,7 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
     xml = update_header_parties(xml, company_name, font=font)
     xml = fill_bank_account(xml, company)
     xml = replace_signature_section(xml, company, font=font)
+    xml = _fix_income_code_for_uspace(xml)
 
     validate_xml(xml)
 
