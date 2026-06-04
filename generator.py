@@ -104,6 +104,24 @@ def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str, size: int = 0)
     return xml[:ps] + new_p + xml[pe:]
 
 
+def _inject_padding_into_para_sdt(xml: str, ps: int, pe: int, padding: str, suffix: str) -> str:
+    """Add padding before suffix within an sdt paragraph by modifying <w:t> only."""
+    if not padding:
+        return xml
+    para_xml = xml[ps:pe]
+    t_pat = re.compile(r'(<w:t(?:\s[^>]*)?>)(.*?)(</w:t>)', re.DOTALL)
+    new_para = para_xml
+    for m in reversed(list(t_pat.finditer(para_xml))):
+        t_content = m.group(2)
+        if suffix in t_content:
+            sfx_idx = t_content.find(suffix)
+            prefix_part = t_content[:sfx_idx].rstrip('　 ')
+            new_content = prefix_part + padding + suffix
+            new_para = new_para[:m.start(2)] + new_content + new_para[m.end(2):]
+            break
+    return xml[:ps] + new_para + xml[pe:]
+
+
 def _align_party_suffixes(xml: str) -> str:
     """Pad 甲方/乙方 preamble lines so （下稱「X方」） suffixes align."""
     paragraphs = list_paragraphs(xml)
@@ -124,16 +142,22 @@ def _align_party_suffixes(xml: str) -> str:
     yi_ps, yi_pe, yi_pre, yi_sfx = yi_info
     max_len = max(len(jia_pre), len(yi_pre))
     items = [
-        (jia_ps, jia_pe, jia_pre + '　' * (max_len - len(jia_pre)) + jia_sfx),
-        (yi_ps,  yi_pe,  yi_pre  + '　' * (max_len - len(yi_pre))  + yi_sfx),
+        (jia_ps, jia_pe, jia_pre, '　' * (max_len - len(jia_pre)), jia_sfx),
+        (yi_ps,  yi_pe,  yi_pre,  '　' * (max_len - len(yi_pre)),  yi_sfx),
     ]
-    for ps, pe, new_text in sorted(items, key=lambda x: x[0], reverse=True):
-        xml = _rebuild_para_text(xml, ps, pe, new_text)
+    for ps, pe, pre, padding, sfx in sorted(items, key=lambda x: x[0], reverse=True):
+        if not padding:
+            continue
+        para_xml = xml[ps:pe]
+        if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
+            xml = _inject_padding_into_para_sdt(xml, ps, pe, padding, sfx)
+        else:
+            xml = _rebuild_para_text(xml, ps, pe, pre + padding + sfx)
     return xml
 
 
-def _apply_date_format(xml: str) -> str:
-    """Set signing date line to font size 20; use blank format when no date filled."""
+def _apply_date_format(xml: str, sign_date: str = '') -> str:
+    """Set signing date line to font size 20; inject sign_date when provided."""
     DATE_TEXT = '中　華　民　國　　　年　　月　　日'
     paragraphs = list_paragraphs(xml)
     total = len(paragraphs)
@@ -141,13 +165,21 @@ def _apply_date_format(xml: str) -> str:
         if i < total // 2:
             continue
         if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
-            new_text = text if re.search(r'\d', text) else DATE_TEXT
+            if re.search(r'\d', text):
+                new_text = text
+            elif sign_date:
+                new_text = '中　華　民　國　' + sign_date
+            else:
+                para_xml = xml[ps:pe]
+                if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
+                    break  # uspace template already formatted correctly, leave intact
+                new_text = DATE_TEXT
             xml = _rebuild_para_text(xml, ps, pe, new_text, size=20)
             break
     return xml
 
 
-def _post_process_docx(docx_bytes: bytes) -> bytes:
+def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
     """Apply party suffix alignment and standard date line format."""
     in_buf = io.BytesIO(docx_bytes)
     out_buf = io.BytesIO()
@@ -158,7 +190,7 @@ def _post_process_docx(docx_bytes: bytes) -> bytes:
                 if item.filename == 'word/document.xml':
                     doc_xml = data.decode('utf-8')
                     doc_xml = _align_party_suffixes(doc_xml)
-                    doc_xml = _apply_date_format(doc_xml)
+                    doc_xml = _apply_date_format(doc_xml, sign_date)
                     data = doc_xml.encode('utf-8')
                 zout.writestr(item, data)
     return out_buf.getvalue()
@@ -220,7 +252,7 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
 
     buf = io.BytesIO()
     tpl.save(buf)
-    docx_bytes = _post_process_docx(buf.getvalue())
+    docx_bytes = _post_process_docx(buf.getvalue(), ctx.get('sign_date', ''))
     docx_bytes = _override_fonts(docx_bytes)
 
     contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
