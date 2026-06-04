@@ -512,19 +512,25 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
     paragraphs = list_paragraphs(xml)
     yi_idx = jia_idx = None
 
-    # Find 乙方 paragraph: has company name AND a party label character
-    for i, (_, _, text) in enumerate(paragraphs[:35]):
-        if company_name in text and re.search(r'[乙出承][　\s]*(方|租人)[：:]', text):
+    # Patterns allow parenthetical annotations between label and colon,
+    # e.g. "乙方（承租人）：" or "甲方（出租人）："
+    _COLON_PART = r'[^：:\n]{0,30}[：:]'
+    yi_pat = re.compile(r'(?:乙[　\s]*方|承租人)' + _COLON_PART)
+    jia_pat = re.compile(r'(?:甲[　\s]*方|出租人)' + _COLON_PART)
+
+    # Find 乙方 paragraph containing the company name (search up to 50 paragraphs)
+    for i, (_, _, text) in enumerate(paragraphs[:50]):
+        if company_name in text and yi_pat.search(text):
             yi_idx = i
             break
 
     if yi_idx is None:
         return xml
 
-    # Find 甲方 paragraph: a nearby paragraph before yi_idx with 甲/出 label
-    for i in range(yi_idx - 1, max(-1, yi_idx - 8), -1):
+    # Find 甲方 paragraph: scan up to 20 paragraphs before yi_idx
+    for i in range(yi_idx - 1, max(-1, yi_idx - 20), -1):
         _, _, text = paragraphs[i]
-        if re.search(r'^[甲出][　\s]*(方|租人)[（：:]', text.strip()):
+        if jia_pat.search(text.strip()):
             jia_idx = i
             break
 
