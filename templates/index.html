@@ -580,8 +580,18 @@ async function doGenerate() {
     var fd = new FormData();
     fd.append('company', selected.company);
     fd.append('contract_type', selected.ctype);
+    // track which radio groups have been handled
+    var radiosDone = {};
     document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(function(el) {
-        fd.append(el.name, el.value);
+        if (el.type === 'radio') {
+            if (!radiosDone[el.name]) {
+                radiosDone[el.name] = true;
+                var checked = document.querySelector('#tab-generate input[name="' + el.name + '"]:checked');
+                fd.append(el.name, checked ? checked.value : '');
+            }
+        } else {
+            fd.append(el.name, el.value);
+        }
     });
 
     try {
