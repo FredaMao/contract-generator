@@ -133,7 +133,7 @@ def _align_party_suffixes(xml: str) -> str:
 
 
 def _apply_date_format(xml: str) -> str:
-    """Replace signing date line with standard blank format at font size 20."""
+    """Set signing date line to font size 20; use blank format when no date filled."""
     DATE_TEXT = '中　華　民　國　　　年　　月　　日'
     paragraphs = list_paragraphs(xml)
     total = len(paragraphs)
@@ -141,7 +141,8 @@ def _apply_date_format(xml: str) -> str:
         if i < total // 2:
             continue
         if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
-            xml = _rebuild_para_text(xml, ps, pe, DATE_TEXT, size=20)
+            new_text = text if re.search(r'\d', text) else DATE_TEXT
+            xml = _rebuild_para_text(xml, ps, pe, new_text, size=20)
             break
     return xml
 
