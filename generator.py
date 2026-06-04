@@ -3,6 +3,7 @@ import os
 import re
 import zipfile
 from docxtpl import DocxTemplate
+from converter import xml_escape, list_paragraphs
 
 FONT = '微軟正黑體'
 
@@ -76,6 +77,92 @@ def _override_fonts(docx_bytes: bytes) -> bytes:
     return out_buf.getvalue()
 
 
+_PARTY_SFX_PAT = re.compile(r'[（(][^）)]{0,30}[甲乙][　\s]*方[^）)]{0,10}[）)]')
+_DATE_PAT = re.compile(r'中[　 ]*華[　 ]*民[　 ]*國')
+
+
+def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str, size: int = 0) -> str:
+    para_xml = xml[ps:pe]
+    ppr_m = re.search(r'<w:pPr[\s>].*?</w:pPr>', para_xml, re.DOTALL)
+    ppr = ppr_m.group(0) if ppr_m else ''
+    rpr_m = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
+    if not rpr_m:
+        rpr_m = re.search(r'<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
+    if rpr_m:
+        rpr_content = re.sub(r'<w:sz\b[^/]*/>', '', rpr_m.group(1))
+        rpr_content = re.sub(r'<w:szCs\b[^/]*/>', '', rpr_content)
+        if size:
+            rpr_content += f'<w:sz w:val="{size * 2}"/><w:szCs w:val="{size * 2}"/>'
+        rpr = f'<w:rPr>{rpr_content}</w:rPr>'
+    else:
+        sz_xml = f'<w:sz w:val="{size * 2}"/><w:szCs w:val="{size * 2}"/>' if size else ''
+        rpr = f'<w:rPr>{sz_xml}</w:rPr>' if sz_xml else ''
+    new_p = (f'<w:p>{ppr}'
+             f'<w:r>{rpr}'
+             f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
+             f'</w:r></w:p>')
+    return xml[:ps] + new_p + xml[pe:]
+
+
+def _align_party_suffixes(xml: str) -> str:
+    """Pad 甲方/乙方 preamble lines so （下稱「X方」） suffixes align."""
+    paragraphs = list_paragraphs(xml)
+    jia_info = yi_info = None
+    for ps, pe, text in paragraphs[:60]:
+        m = _PARTY_SFX_PAT.search(text)
+        if not m:
+            continue
+        sfx_text = text[m.start():]
+        prefix = text[:m.start()].rstrip('　 ')
+        if '甲方' in sfx_text and jia_info is None:
+            jia_info = (ps, pe, prefix, sfx_text)
+        elif '乙方' in sfx_text and yi_info is None:
+            yi_info = (ps, pe, prefix, sfx_text)
+    if not jia_info or not yi_info:
+        return xml
+    jia_ps, jia_pe, jia_pre, jia_sfx = jia_info
+    yi_ps, yi_pe, yi_pre, yi_sfx = yi_info
+    max_len = max(len(jia_pre), len(yi_pre))
+    items = [
+        (jia_ps, jia_pe, jia_pre + '　' * (max_len - len(jia_pre)) + jia_sfx),
+        (yi_ps,  yi_pe,  yi_pre  + '　' * (max_len - len(yi_pre))  + yi_sfx),
+    ]
+    for ps, pe, new_text in sorted(items, key=lambda x: x[0], reverse=True):
+        xml = _rebuild_para_text(xml, ps, pe, new_text)
+    return xml
+
+
+def _apply_date_format(xml: str) -> str:
+    """Replace signing date line with standard blank format at font size 20."""
+    DATE_TEXT = '中　華　民　國　　　年　　月　　日'
+    paragraphs = list_paragraphs(xml)
+    total = len(paragraphs)
+    for i, (ps, pe, text) in enumerate(paragraphs):
+        if i < total // 2:
+            continue
+        if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
+            xml = _rebuild_para_text(xml, ps, pe, DATE_TEXT, size=20)
+            break
+    return xml
+
+
+def _post_process_docx(docx_bytes: bytes) -> bytes:
+    """Apply party suffix alignment and standard date line format."""
+    in_buf = io.BytesIO(docx_bytes)
+    out_buf = io.BytesIO()
+    with zipfile.ZipFile(in_buf) as zin:
+        with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == 'word/document.xml':
+                    doc_xml = data.decode('utf-8')
+                    doc_xml = _align_party_suffixes(doc_xml)
+                    doc_xml = _apply_date_format(doc_xml)
+                    data = doc_xml.encode('utf-8')
+                zout.writestr(item, data)
+    return out_buf.getvalue()
+
+
 def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
     building_name = form_data.get('building_name', '').strip()
     if not building_name:
@@ -132,7 +219,8 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
 
     buf = io.BytesIO()
     tpl.save(buf)
-    docx_bytes = _override_fonts(buf.getvalue())
+    docx_bytes = _post_process_docx(buf.getvalue())
+    docx_bytes = _override_fonts(docx_bytes)
 
     contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
     building_id = ctx['building_id']

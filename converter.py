@@ -158,9 +158,11 @@ def make_rpr(font: str) -> str:
             f'</w:rPr>')
 
 
-def sig_para(text: str, font: str = '思源黑體') -> str:
+def sig_para(text: str, font: str = '思源黑體', size: int = 0) -> str:
     ppr = make_ppr_sig(font)
     rpr = make_rpr(font)
+    if size:
+        rpr = rpr.replace('</w:rPr>', f'<w:sz w:val="{size * 2}"/><w:szCs w:val="{size * 2}"/></w:rPr>')
     return (
         f'<w:p>{ppr}'
         f'<w:r>{rpr}'
@@ -272,7 +274,7 @@ def build_signature_section(company: dict, font: str = '思源黑體',
             sig_para(jia, font),
             sig_para(yi, font),
             empty_sig_para(),
-            sig_para('中　華　民　國　　　年　　月　　日', font),
+            sig_para('中　華　民　國　　　年　　月　　日', font, size=20),
         ]
     else:  # stamp / name / default
         jia_label = '甲方名稱：' if label_fmt == 'name' else '甲方（蓋章）：'
@@ -292,7 +294,7 @@ def build_signature_section(company: dict, font: str = '思源黑體',
             sig_para(f'{u["contact_label"]}：{u["contact"]}', font),
             sig_para(f'地址：{u["address"]}', font),
             empty_sig_para(),
-            sig_para('中　華　民　國　　　年　　月　　日', font),
+            sig_para('中　華　民　國　　　年　　月　　日', font, size=20),
         ]
     return ''.join(parts)
 
@@ -539,18 +541,25 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
 
     if not font:
         font = detect_main_font(xml)
-    to_update = []
 
     # 乙方 paragraph → replace company name with 悠勢, preserve label+suffix
     yi_text = paragraphs[yi_idx][2]
-    lbl, _, sfx = _split_label_value_suffix(yi_text, USPACE['name'])
-    to_update.append((yi_idx, lbl + USPACE['name'] + sfx))
+    yi_lbl, _, yi_sfx = _split_label_value_suffix(yi_text, USPACE['name'])
+    yi_prefix = yi_lbl + USPACE['name']
 
+    to_update = []
     # 甲方 paragraph → replace business owner with company, preserve label+suffix
     if jia_idx is not None:
         jia_text = paragraphs[jia_idx][2]
-        lbl, _, sfx = _split_label_value_suffix(jia_text, company_name)
-        to_update.append((jia_idx, lbl + company_name + sfx))
+        jia_lbl, _, jia_sfx = _split_label_value_suffix(jia_text, company_name)
+        jia_prefix = jia_lbl + company_name
+        # Align suffixes: pad shorter prefix with full-width spaces
+        max_pre = max(len(yi_prefix), len(jia_prefix))
+        yi_prefix  = yi_prefix  + '　' * (max_pre - len(yi_prefix))
+        jia_prefix = jia_prefix + '　' * (max_pre - len(jia_prefix))
+        to_update.append((jia_idx, jia_prefix + jia_sfx))
+
+    to_update.append((yi_idx, yi_prefix + yi_sfx))
 
     # Apply later index first
     for idx, new_text in sorted(to_update, key=lambda x: x[0], reverse=True):
