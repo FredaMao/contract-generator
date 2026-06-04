@@ -94,7 +94,16 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     ctx['building_id'] = form_data.get('building_id', '').strip()
     ctx['building_name'] = building_name
     ctx['building_phone'] = form_data.get('building_phone', '').strip()
-    ctx['income_code'] = form_data.get('income_code', '').strip()
+    # income_code value encodes category + code, e.g. "個人_空地租賃(51L)"
+    ic_full = form_data.get('income_code', '').strip()
+    ic_display = ic_full.split('_', 1)[1] if '_' in ic_full else ic_full
+    ctx['income_code'] = ic_display
+    ctx['ic_personal_51L']   = (ic_full == '個人_空地租賃(51L)')
+    ctx['ic_personal_51J']   = (ic_full == '個人_建物租賃(51J)')
+    ctx['ic_corp_00']        = (ic_full == '法人_00發票')
+    ctx['ic_committee_51L']  = (ic_full == '管委會_空地租賃(51L)')
+    ctx['ic_committee_51J']  = (ic_full == '管委會_建物租賃(51J)')
+    ctx['ic_committee_00']   = (ic_full == '管委會_00發票')
     ctx['sales'] = form_data.get('sales', '').strip()
 
     if company_key == '悠勢':

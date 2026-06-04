@@ -261,26 +261,6 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <label>建物綁定電話</label>
                 <input type="text" name="building_phone" placeholder="例：02-2345-6789">
             </div>
-            <div class="f span2">
-                <label>所得代號</label>
-                <div class="ic-group">
-                    <div class="ic-row">
-                        <span class="ic-cat">個人</span>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="空地租賃(51L)"> 空地租賃 (51L)</label>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="建物租賃(51J)"> 建物租賃 (51J)</label>
-                    </div>
-                    <div class="ic-row">
-                        <span class="ic-cat">法人</span>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="00發票"> 00 發票</label>
-                    </div>
-                    <div class="ic-row">
-                        <span class="ic-cat">管委會</span>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="空地租賃(51L)"> 空地租賃 (51L)</label>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="建物租賃(51J)"> 建物租賃 (51J)</label>
-                        <label class="ic-opt"><input type="radio" name="income_code" value="00發票"> 00 發票</label>
-                    </div>
-                </div>
-            </div>
             <div class="f">
                 <label>業務人員</label>
                 <input type="text" name="sales" placeholder="">
@@ -378,6 +358,26 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                     <option value="稅前">稅前</option>
                     <option value="稅後">稅後</option>
                 </select>
+            </div>
+            <div class="f span2">
+                <label>所得代號</label>
+                <div class="ic-group">
+                    <div class="ic-row">
+                        <span class="ic-cat">個人</span>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="個人_空地租賃(51L)"> 空地租賃 (51L)</label>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="個人_建物租賃(51J)"> 建物租賃 (51J)</label>
+                    </div>
+                    <div class="ic-row">
+                        <span class="ic-cat">法人</span>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="法人_00發票"> 00 發票</label>
+                    </div>
+                    <div class="ic-row">
+                        <span class="ic-cat">管委會</span>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="管委會_空地租賃(51L)"> 空地租賃 (51L)</label>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="管委會_建物租賃(51J)"> 建物租賃 (51J)</label>
+                        <label class="ic-opt"><input type="radio" name="income_code" value="管委會_00發票"> 00 發票</label>
+                    </div>
+                </div>
             </div>
         </div>
 
