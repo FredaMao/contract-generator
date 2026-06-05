@@ -236,6 +236,11 @@ def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
                     doc_xml = _align_party_suffixes(doc_xml)
                     doc_xml = _apply_date_format(doc_xml, sign_date)
                     data = doc_xml.encode('utf-8')
+                elif item.filename.startswith('word/') and item.filename.endswith('.xml'):
+                    xml_str = data.decode('utf-8')
+                    if 'w14:paraId' in xml_str or 'w14:textId' in xml_str:
+                        xml_str = _fix_paragraph_ids(xml_str)
+                        data = xml_str.encode('utf-8')
                 zout.writestr(item, data)
     return out_buf.getvalue()
 
