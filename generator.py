@@ -166,15 +166,7 @@ def _apply_date_format(xml: str, sign_date: str = '') -> str:
         if i < total // 2:
             continue
         if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
-            if re.search(r'\d', text):
-                new_text = text
-            elif sign_date:
-                new_text = '中　華　民　國　' + sign_date
-            else:
-                para_xml = xml[ps:pe]
-                if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
-                    break  # uspace template already formatted correctly, leave intact
-                new_text = DATE_TEXT
+            new_text = ('中　華　民　國　' + sign_date) if sign_date else DATE_TEXT
             xml = _rebuild_para_text(xml, ps, pe, new_text, size=20)
             break
     return xml
