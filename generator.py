@@ -107,8 +107,6 @@ def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str, size: int = 0)
 
 def _inject_padding_into_para_sdt(xml: str, ps: int, pe: int, padding: str, suffix: str) -> str:
     """Add padding before suffix within an sdt paragraph by modifying <w:t> only."""
-    if not padding:
-        return xml
     para_xml = xml[ps:pe]
     t_pat = re.compile(r'(<w:t(?:\s[^>]*)?>)(.*?)(</w:t>)', re.DOTALL)
     new_para = para_xml
@@ -147,12 +145,10 @@ def _align_party_suffixes(xml: str) -> str:
         (yi_ps,  yi_pe,  yi_pre,  '　' * (max_len - len(yi_pre)),  yi_sfx),
     ]
     for ps, pe, pre, padding, sfx in sorted(items, key=lambda x: x[0], reverse=True):
-        if not padding:
-            continue
         para_xml = xml[ps:pe]
         if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
             xml = _inject_padding_into_para_sdt(xml, ps, pe, padding, sfx)
-        else:
+        elif padding:
             xml = _rebuild_para_text(xml, ps, pe, pre + padding + sfx)
     return xml
 
