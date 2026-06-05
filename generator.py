@@ -1,5 +1,6 @@
 import io
 import os
+import random
 import re
 import zipfile
 from docxtpl import DocxTemplate
@@ -179,6 +180,48 @@ def _apply_date_format(xml: str, sign_date: str = '') -> str:
     return xml
 
 
+def _fix_paragraph_ids(xml: str) -> str:
+    """Assign unique w14:paraId and w14:textId values to avoid Word 'unreadable content' warning.
+
+    Google Docs exports use 77777777 as a placeholder textId for every paragraph,
+    causing Word to report duplicate paragraph IDs as an OOXML schema violation.
+    """
+    used: set[str] = set()
+
+    def _new_id() -> str:
+        while True:
+            hex_id = f'{random.randint(1, 0xFFFFFFFE):08X}'
+            if hex_id not in used:
+                used.add(hex_id)
+                return hex_id
+
+    # Seed with existing non-placeholder IDs so we never collide with them.
+    for val in re.findall(r'w14:(?:paraId|textId)="([0-9A-Fa-f]+)"', xml):
+        if val.upper() != '77777777':
+            used.add(val.upper())
+
+    seen_para: set[str] = set()
+    seen_text: set[str] = set()
+
+    def _replace_para_id(m: re.Match) -> str:
+        val = m.group(1).upper()
+        if val in seen_para:
+            return f'w14:paraId="{_new_id()}"'
+        seen_para.add(val)
+        return m.group(0)
+
+    def _replace_text_id(m: re.Match) -> str:
+        val = m.group(1).upper()
+        if val == '77777777' or val in seen_text:
+            return f'w14:textId="{_new_id()}"'
+        seen_text.add(val)
+        return m.group(0)
+
+    xml = re.sub(r'w14:paraId="([0-9A-Fa-f]+)"', _replace_para_id, xml)
+    xml = re.sub(r'w14:textId="([0-9A-Fa-f]+)"', _replace_text_id, xml)
+    return xml
+
+
 def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
     """Apply party suffix alignment and standard date line format."""
     in_buf = io.BytesIO(docx_bytes)
@@ -189,6 +232,7 @@ def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
                 data = zin.read(item.filename)
                 if item.filename == 'word/document.xml':
                     doc_xml = data.decode('utf-8')
+                    doc_xml = _fix_paragraph_ids(doc_xml)
                     doc_xml = _align_party_suffixes(doc_xml)
                     doc_xml = _apply_date_format(doc_xml, sign_date)
                     data = doc_xml.encode('utf-8')
