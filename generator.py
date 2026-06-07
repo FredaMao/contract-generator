@@ -38,6 +38,21 @@ COMPANIES = {
 COMPANY_TEMPLATES = {'rent': 'template_rent.docx', 'profit': 'template_profit.docx'}
 USPACE_TEMPLATES = {'rent': 'template_rent_uspace.docx', 'profit': 'template_profit_uspace.docx'}
 
+_OPTIONAL_BLANKS = {
+    'spots':          '____',
+    'pay_period':     '__',
+    'pay_day':        '__',
+    'low_rev':        '____________',
+    'bank_name':      '____________________',
+    'account_name':   '____________________',
+    'account_number': '____________________',
+    'phone':          '______________',
+    'email':          '____________________',
+    'start_date':     '____年__月__日',
+    'end_date':       '____年__月__日',
+    'sign_date':      '____年__月__日',
+}
+
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
 
 
@@ -284,12 +299,18 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
         ctx['b_email'] = co['email']
         company_label = co['name']
 
+    sign_date_raw = ctx.get('sign_date', '')  # preserve for _apply_date_format
+
+    for field, blank in _OPTIONAL_BLANKS.items():
+        if not ctx.get(field, '').strip():
+            ctx[field] = blank
+
     tpl = DocxTemplate(os.path.join(TEMPLATE_DIR, tpl_file))
     tpl.render(ctx)
 
     buf = io.BytesIO()
     tpl.save(buf)
-    docx_bytes = _post_process_docx(buf.getvalue(), ctx.get('sign_date', ''))
+    docx_bytes = _post_process_docx(buf.getvalue(), sign_date_raw)
     docx_bytes = _override_fonts(docx_bytes)
 
     contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
