@@ -249,7 +249,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="building_id" placeholder="例：A001">
             </div>
             <div class="f">
-                <label>建物名稱 *</label>
+                <label>建物名稱 <span class="req">*</span></label>
                 <input type="text" name="building_name" placeholder="例：信義停車場" required>
             </div>
             <div class="f span2">
@@ -309,7 +309,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
             <!-- 租賃型 -->
             <div class="f rent-only">
-                <label>月租金 <span class="req">*</span></label>
+                <label>租金 <span class="req">*</span></label>
                 <input type="text" name="amount" placeholder="例：50,000">
             </div>
             <div class="f rent-only">
@@ -498,7 +498,7 @@ function validateForm() {
     }
 
     if (isRent) {
-        chk('amount',     '月租金');
+        chk('amount',     '租金');
         chk('pay_freq',   '付款頻率');
         chk('pay_method', '付款方式');
     } else {
