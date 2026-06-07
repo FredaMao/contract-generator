@@ -183,7 +183,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 </style>
 </head>
 <body>
-<div class="card" id="card">
+<div class="card wide" id="card">
     <div class="logo">
         <img src="/static/logo.png" alt="悠勢科技 Logo">
         <span>悠勢科技股份有限公司</span>
@@ -191,12 +191,12 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
     <h1>合約系統</h1>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('convert', this)">合約轉換</button>
-        <button class="tab-btn" onclick="switchTab('generate', this)">產生新合約</button>
+        <button class="tab-btn active" onclick="switchTab('generate', this)">產生新合約</button>
+        <button class="tab-btn" onclick="switchTab('convert', this)">合約轉換</button>
     </div>
 
     <!-- ── Tab 1: 合約轉換 ── -->
-    <div id="tab-convert" class="tab-content active">
+    <div id="tab-convert" class="tab-content">
         <div class="flow">
             <span class="pill">對業主合約</span>
             <span class="arrow">→</span>
@@ -223,7 +223,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
     </div>
 
     <!-- ── Tab 2: 產生新合約 ── -->
-    <div id="tab-generate" class="tab-content">
+    <div id="tab-generate" class="tab-content active">
 
         <!-- 合約設定 -->
         <div class="selector-row">
