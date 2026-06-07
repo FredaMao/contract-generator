@@ -177,6 +177,9 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 .ic-opt { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #1a2332; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.15s; }
 .ic-opt:hover { background: #f0f4ff; }
 .ic-opt input[type="radio"] { cursor: pointer; accent-color: #3b6fd4; }
+.req { color: #e74c3c; margin-left: 1px; }
+.f input.field-error, .f select.field-error { border-color: #e74c3c !important; background: #fff8f8; }
+.ic-group.field-error { outline: 2px solid #e74c3c; border-radius: 6px; padding: 2px 4px; }
 </style>
 </head>
 <body>
@@ -250,7 +253,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="building_name" placeholder="例：信義停車場" required>
             </div>
             <div class="f span2">
-                <label>停車場地址</label>
+                <label>停車場地址 <span class="req">*</span></label>
                 <input type="text" name="address" placeholder="例：臺北市中山區○○路1號">
             </div>
             <div class="f">
@@ -262,7 +265,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="building_phone" placeholder="例：02-2345-6789">
             </div>
             <div class="f">
-                <label>業務人員</label>
+                <label>業務人員 <span class="req">*</span></label>
                 <input type="text" name="sales" placeholder="">
             </div>
         </div>
@@ -273,15 +276,15 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
         <div class="section-label">甲方（業主）資料</div>
         <div class="form-grid">
             <div class="f span2">
-                <label>甲方名稱（公司名稱或姓名）</label>
+                <label>甲方名稱（公司名稱或姓名） <span class="req">*</span></label>
                 <input type="text" name="party_a" placeholder="例：○○有限公司 或 王小明">
             </div>
             <div class="f">
-                <label>負責人</label>
+                <label>負責人 <span class="req">*</span></label>
                 <input type="text" name="owner" placeholder="">
             </div>
             <div class="f">
-                <label>統編 / 身分證字號</label>
+                <label>統編 / 身分證字號 <span class="req">*</span></label>
                 <input type="text" name="id_number" placeholder="">
             </div>
             <div class="f">
@@ -293,7 +296,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="a_email" placeholder="">
             </div>
             <div class="f span2">
-                <label>聯絡地址</label>
+                <label>聯絡地址 <span class="req">*</span></label>
                 <input type="text" name="contact_address" placeholder="">
             </div>
         </div>
@@ -306,7 +309,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
             <!-- 租賃型 -->
             <div class="f rent-only">
-                <label>月租金</label>
+                <label>月租金 <span class="req">*</span></label>
                 <input type="text" name="amount" placeholder="例：50,000">
             </div>
             <div class="f rent-only">
@@ -314,7 +317,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="low_rev" placeholder="例：45,000">
             </div>
             <div class="f rent-only">
-                <label>付款頻率</label>
+                <label>付款頻率 <span class="req">*</span></label>
                 <select name="pay_freq" onchange="onPayFreqChange(this)">
                     <option value="">請選擇</option>
                     <option value="月繳">月繳</option>
@@ -332,7 +335,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="pay_day" placeholder="例：每月5日">
             </div>
             <div class="f rent-only">
-                <label>付款方式</label>
+                <label>付款方式 <span class="req">*</span></label>
                 <select name="pay_method">
                     <option value="">請選擇</option>
                     <option value="匯款">匯款</option>
@@ -342,17 +345,17 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
             <!-- 分潤型 -->
             <div class="f profit-only hidden">
-                <label>甲方分潤比例（%）</label>
+                <label>甲方分潤比例（%） <span class="req">*</span></label>
                 <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcPartyB(this)">
             </div>
             <div class="f profit-only hidden">
-                <label>乙方分潤比例（%）</label>
+                <label>乙方分潤比例（%） <span class="req">*</span></label>
                 <input type="text" name="party_b_percent" id="b-percent" placeholder="例：30">
             </div>
 
             <!-- 共用 -->
             <div class="f">
-                <label>稅務</label>
+                <label>稅務 <span class="req">*</span></label>
                 <select name="tax_type">
                     <option value="">請選擇</option>
                     <option value="稅前">稅前</option>
@@ -360,8 +363,8 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 </select>
             </div>
             <div class="f span2">
-                <label>所得代號</label>
-                <div class="ic-group">
+                <label>所得代號 <span class="req">*</span></label>
+                <div class="ic-group" id="ic-group">
                     <div class="ic-row">
                         <span class="ic-cat">個人</span>
                         <label class="ic-opt"><input type="radio" name="income_code" value="個人_空地租賃(51L)"> 空地租賃 (51L)</label>
@@ -451,6 +454,7 @@ function updateFields() {
     document.querySelectorAll('.rent-only').forEach(function(el) { el.classList.toggle('hidden', !isRent); });
     document.querySelectorAll('.profit-only').forEach(function(el) { el.classList.toggle('hidden', isRent); });
     document.querySelectorAll('.uspace-only').forEach(function(el) { el.classList.toggle('hidden', !isUspace); });
+    clearErrors();
 }
 
 // Auto-fill pay_period from pay_freq
@@ -458,6 +462,51 @@ var freqPeriodMap = { '月繳': '1', '季繳': '3', '半年繳': '6', '年繳': 
 function onPayFreqChange(sel) {
     var el = document.getElementById('pay-period');
     el.value = freqPeriodMap[sel.value] || '';
+}
+
+// ── Validation ──
+function clearErrors() {
+    document.querySelectorAll('.field-error').forEach(function(el) { el.classList.remove('field-error'); });
+}
+
+function validateForm() {
+    clearErrors();
+    var errors = [];
+    var isRent = selected.ctype === 'rent';
+
+    function chk(name, label) {
+        var el = document.querySelector('#tab-generate [name="' + name + '"]');
+        if (!el || !el.value.trim()) {
+            if (el) el.classList.add('field-error');
+            errors.push(label);
+        }
+    }
+
+    chk('address',         '停車場地址');
+    chk('sales',           '業務人員');
+    chk('party_a',         '甲方名稱');
+    chk('owner',           '負責人');
+    chk('id_number',       '統編／身分證字號');
+    chk('contact_address', '聯絡地址');
+    chk('tax_type',        '稅務');
+
+    var icChecked = document.querySelector('#tab-generate input[name="income_code"]:checked');
+    if (!icChecked) {
+        var ig = document.getElementById('ic-group');
+        if (ig) ig.classList.add('field-error');
+        errors.push('所得代號');
+    }
+
+    if (isRent) {
+        chk('amount',     '月租金');
+        chk('pay_freq',   '付款頻率');
+        chk('pay_method', '付款方式');
+    } else {
+        chk('party_a_percent', '甲方分潤比例');
+        chk('party_b_percent', '乙方分潤比例');
+    }
+
+    return errors;
 }
 
 // Auto-calc 乙方% = 100 - 甲方%
@@ -533,6 +582,11 @@ async function doConvert() {
 // ── Generate tab ──
 async function doGenerate() {
     var btn = document.getElementById('gen-btn');
+    var errors = validateForm();
+    if (errors.length > 0) {
+        showStatus('gen-status', '✗ 請填寫必填欄位：' + errors.join('、'), 'error');
+        return;
+    }
     btn.disabled = true;
     showStatus('gen-status', '<span class="spinner"></span>產生中，請稍候…', 'loading');
 
@@ -587,6 +641,18 @@ function showStatus(id, html, type) {
     el.className = 'status ' + type;
     el.style.display = 'block';
 }
+
+// Clear error highlight when user edits a field
+document.querySelectorAll('#tab-generate input, #tab-generate select').forEach(function(el) {
+    el.addEventListener('input', function() { el.classList.remove('field-error'); });
+    el.addEventListener('change', function() { el.classList.remove('field-error'); });
+});
+document.querySelectorAll('#tab-generate input[name="income_code"]').forEach(function(el) {
+    el.addEventListener('change', function() {
+        var ig = document.getElementById('ic-group');
+        if (ig) ig.classList.remove('field-error');
+    });
+});
 </script>
 </body>
 </html>
