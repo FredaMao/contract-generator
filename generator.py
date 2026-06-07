@@ -148,7 +148,7 @@ def _align_party_suffixes(xml: str) -> str:
         para_xml = xml[ps:pe]
         if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
             xml = _inject_padding_into_para_sdt(xml, ps, pe, padding, sfx)
-        elif padding:
+        else:
             xml = _rebuild_para_text(xml, ps, pe, pre + padding + sfx)
     return xml
 
