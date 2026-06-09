@@ -316,7 +316,6 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
     building_id = ctx['building_id']
     party_a = form_data.get('party_a', '').strip()
-    bracket = f"[{building_id}{building_name}]"
-    filename = f"{bracket}-{party_a}-{contract_title}.docx"
+    filename = f"{building_id}{building_name}-{party_a}-{contract_title}.docx"
 
     return docx_bytes, filename
