@@ -1,5 +1,8 @@
 import io
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
+import json
+import os
+from datetime import datetime
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +14,29 @@ app = FastAPI(title="合約系統｜悠勢科技")
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+SHEET_ID = '1hirWGvr3H_Rrg3gbtnC_-3vvohB4hTI056PK_admlxg'
+
+
+def _log_to_sheet(row: list):
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+        if not creds_json:
+            return
+        creds = Credentials.from_service_account_info(
+            json.loads(creds_json),
+            scopes=['https://www.googleapis.com/auth/spreadsheets'],
+        )
+        client = gspread.authorize(creds)
+        client.open_by_key(SHEET_ID).sheet1.append_row(row)
+    except Exception:
+        pass
+
+
+def _now() -> str:
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -18,7 +44,7 @@ async def index(request: Request):
 
 
 @app.post("/convert")
-async def convert(file: UploadFile = File(...)):
+async def convert(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not file.filename.lower().endswith('.docx'):
         raise HTTPException(status_code=400, detail="請上傳 .docx 格式的檔案")
     content = await file.read()
@@ -28,6 +54,7 @@ async def convert(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"轉換失敗：{str(e)}")
+    background_tasks.add_task(_log_to_sheet, [_now(), '轉換器', '', '', '', file.filename])
     encoded_name = quote(output_filename, safe='')
     return StreamingResponse(
         io.BytesIO(output_bytes),
@@ -38,6 +65,7 @@ async def convert(file: UploadFile = File(...)):
 
 @app.post("/generate")
 async def generate(
+    background_tasks: BackgroundTasks,
     company: str = Form(...),
     contract_type: str = Form(...),
     building_id: str = Form(''),
@@ -89,6 +117,10 @@ async def generate(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"產生失敗：{str(e)}")
+    type_label = '分潤' if contract_type == 'profit' else '租賃'
+    background_tasks.add_task(_log_to_sheet, [
+        _now(), '產生器', company, type_label, party_a, building_name, sales,
+    ])
     encoded_name = quote(filename, safe='')
     return StreamingResponse(
         io.BytesIO(output_bytes),
