@@ -276,15 +276,15 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
         <div class="section-label">甲方（業主）資料</div>
         <div class="form-grid">
             <div class="f span2">
-                <label>甲方名稱（公司名稱或姓名） <span class="req">*</span></label>
+                <label>甲方名稱（公司名稱或姓名）</label>
                 <input type="text" name="party_a" placeholder="例：○○有限公司 或 王小明">
             </div>
             <div class="f">
-                <label>負責人 <span class="req">*</span></label>
+                <label>負責人</label>
                 <input type="text" name="owner" placeholder="">
             </div>
             <div class="f">
-                <label>統編 / 身分證字號 <span class="req">*</span></label>
+                <label>統編 / 身分證字號</label>
                 <input type="text" name="id_number" placeholder="">
             </div>
             <div class="f">
@@ -296,7 +296,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="a_email" placeholder="">
             </div>
             <div class="f span2">
-                <label>聯絡地址 <span class="req">*</span></label>
+                <label>聯絡地址</label>
                 <input type="text" name="contact_address" placeholder="">
             </div>
         </div>
@@ -484,10 +484,6 @@ function validateForm() {
 
     chk('address',         '停車場地址');
     chk('sales',           '業務人員');
-    chk('party_a',         '甲方名稱');
-    chk('owner',           '負責人');
-    chk('id_number',       '統編／身分證字號');
-    chk('contact_address', '聯絡地址');
     chk('tax_type',        '稅務');
 
     var icChecked = document.querySelector('#tab-generate input[name="income_code"]:checked');
