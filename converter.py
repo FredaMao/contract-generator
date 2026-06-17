@@ -5,15 +5,15 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 COMPANIES = {
-    '志昌資產管理有限公司': {
-        'name': '志昌資產管理有限公司',
-        'person': '謝昌志',
+    '志昌資產管理股份有限公司': {
+        'name': '志昌資產管理股份有限公司',
+        'person': '連偉策',
         'id': '90634048',
         'contact_label': '聯絡電話',
         'contact': '0917-444-186',
         'address': '臺北市中山區長安東路2段80號10樓之1',
         'bank': '國泰世華銀行 慶城分行',
-        'account_name': '志昌資產管理有限公司',
+        'account_name': '志昌資產管理股份有限公司',
         'account_no': '268035011822',
     },
     '瀚昱開發股份有限公司': {
@@ -51,9 +51,9 @@ USPACE = {
 
 # Fixed per-company signature page field lines (label + value)
 SIG_FIELDS = {
-    '志昌資產管理有限公司': [
-        '甲方名稱：志昌資產管理有限公司',
-        '代表人：謝昌志',
+    '志昌資產管理股份有限公司': [
+        '甲方名稱：志昌資產管理股份有限公司',
+        '負責人：連偉策',
         '統一編號：90634048',
         '聯絡電話：0917-444-186',
         '聯絡地址：臺北市中山區長安東路2段80號10樓之1',
@@ -523,9 +523,14 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
     jia_pat = re.compile(r'(?:甲[　\s]*方|出租人)' + _COLON_PART)
     jia_suffix_pat = re.compile(r'[「（(]甲[　\s]*方[」）)]')
 
+    # Resolve canonical name (handles old-name aliases)
+    canonical_name = COMPANIES.get(company_name, {}).get('name', company_name)
+    # All keys that refer to the same canonical company (for searching old contracts)
+    name_variants = [k for k, v in COMPANIES.items() if v['name'] == canonical_name]
+
     # Find 乙方 paragraph containing the company name (search up to 50 paragraphs)
     for i, (_, _, text) in enumerate(paragraphs[:50]):
-        if company_name in text and (yi_pat.search(text) or yi_suffix_pat.search(text)):
+        if any(n in text for n in name_variants) and (yi_pat.search(text) or yi_suffix_pat.search(text)):
             yi_idx = i
             break
 
@@ -548,11 +553,11 @@ def update_header_parties(xml: str, company_name: str, font: str = '') -> str:
     yi_prefix = yi_lbl + USPACE['name']
 
     to_update = []
-    # 甲方 paragraph → replace business owner with company, preserve label+suffix
+    # 甲方 paragraph → replace business owner with canonical company name, preserve label+suffix
     if jia_idx is not None:
         jia_text = paragraphs[jia_idx][2]
-        jia_lbl, _, jia_sfx = _split_label_value_suffix(jia_text, company_name)
-        jia_prefix = jia_lbl + company_name
+        jia_lbl, _, jia_sfx = _split_label_value_suffix(jia_text, canonical_name)
+        jia_prefix = jia_lbl + canonical_name
         # Align suffixes: pad shorter prefix with full-width spaces
         max_pre = max(len(yi_prefix), len(jia_prefix))
         yi_prefix  = yi_prefix  + '　' * (max_pre - len(yi_prefix))
