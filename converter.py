@@ -729,6 +729,25 @@ def _find_unique_rid(rels_xml: str) -> str:
     return 'rId998'
 
 
+def _ensure_drawing_namespaces(doc_xml: str) -> str:
+    """Add wp:, a:, pic: namespace declarations if not already present."""
+    NS_NEEDED = [
+        ('xmlns:wp',  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'),
+        ('xmlns:a',   'http://schemas.openxmlformats.org/drawingml/2006/main'),
+        ('xmlns:pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture'),
+    ]
+    additions = [f'{attr}="{uri}"' for attr, uri in NS_NEEDED if attr not in doc_xml[:4000]]
+    if not additions:
+        return doc_xml
+    doc_start = doc_xml.find('<w:document')
+    if doc_start == -1:
+        return doc_xml
+    tag_end = doc_xml.find('>', doc_start)
+    if tag_end == -1:
+        return doc_xml
+    return doc_xml[:tag_end] + ' ' + ' '.join(additions) + doc_xml[tag_end:]
+
+
 def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) -> bytes:
     """Append a new page with the bank account image to the docx."""
     MAX_WIDTH_EMU = 5_500_000
@@ -760,6 +779,7 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
         rels_xml = rels_xml.replace('</Relationships>', new_rel + '</Relationships>')
 
         doc_xml = zin.read('word/document.xml').decode('utf-8')
+        doc_xml = _ensure_drawing_namespaces(doc_xml)
 
         img_para = (
             f'<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
