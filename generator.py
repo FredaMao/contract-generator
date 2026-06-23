@@ -13,9 +13,9 @@ COMPANIES = {
         'name': '志昌資產管理股份有限公司',
         'owner': '連偉策',
         'id': '90634048',
-        'phone': '0917-444-186',
+        'phone': '',
         'address': '臺北市中山區長安東路2段80號10樓之1',
-        'email': '',
+        'email': 'sevice@zcasset.com.tw',
     },
     '瀚昱': {
         'name': '瀚昱開發股份有限公司',
