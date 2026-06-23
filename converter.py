@@ -736,14 +736,16 @@ def _ensure_drawing_namespaces(doc_xml: str) -> str:
         ('xmlns:a',   'http://schemas.openxmlformats.org/drawingml/2006/main'),
         ('xmlns:pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture'),
     ]
-    additions = [f'{attr}="{uri}"' for attr, uri in NS_NEEDED if attr not in doc_xml[:4000]]
-    if not additions:
-        return doc_xml
     doc_start = doc_xml.find('<w:document')
     if doc_start == -1:
         return doc_xml
     tag_end = doc_xml.find('>', doc_start)
     if tag_end == -1:
+        return doc_xml
+    opening_tag = doc_xml[doc_start:tag_end]
+    # Use f'{attr}=' to avoid substring false positives (e.g. xmlns:a matching xmlns:aink)
+    additions = [f'{attr}="{uri}"' for attr, uri in NS_NEEDED if f'{attr}=' not in opening_tag]
+    if not additions:
         return doc_xml
     return doc_xml[:tag_end] + ' ' + ' '.join(additions) + doc_xml[tag_end:]
 
@@ -780,6 +782,19 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
 
         doc_xml = zin.read('word/document.xml').decode('utf-8')
         doc_xml = _ensure_drawing_namespaces(doc_xml)
+
+        # Register JPEG content type in [Content_Types].xml if missing
+        CT_PATH = '[Content_Types].xml'
+        ct_xml_updated = None
+        try:
+            ct_raw = zin.read(CT_PATH).decode('utf-8')
+            if 'Extension="jpg"' not in ct_raw and 'Extension="jpeg"' not in ct_raw:
+                ct_xml_updated = ct_raw.replace(
+                    '</Types>',
+                    '<Default Extension="jpg" ContentType="image/jpeg"/></Types>',
+                )
+        except KeyError:
+            pass
 
         img_para = (
             f'<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
@@ -827,6 +842,8 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
                     data = doc_xml.encode('utf-8')
                 elif item.filename == rels_path:
                     data = rels_xml.encode('utf-8')
+                elif item.filename == CT_PATH and ct_xml_updated:
+                    data = ct_xml_updated.encode('utf-8')
                 zout.writestr(item, data)
             zout.writestr(media_path, img_data)
 
