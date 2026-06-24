@@ -696,159 +696,28 @@ def _fix_income_code_for_uspace(xml: str) -> str:
     return xml
 
 
-def _jpeg_dimensions(data: bytes) -> tuple:
-    """Return (width, height) from JPEG bytes, or (0, 0) on failure."""
-    try:
-        i = 2  # skip SOI marker FF D8
-        while i < len(data) - 1:
-            if data[i] != 0xFF:
-                break
-            marker = data[i + 1]
-            i += 2
-            if marker in (0xC0, 0xC1, 0xC2):
-                h = (data[i + 3] << 8) | data[i + 4]
-                w = (data[i + 5] << 8) | data[i + 6]
-                return w, h
-            if marker in (0xD8, 0xD9):
-                continue
-            if i + 1 >= len(data):
-                break
-            seg_len = (data[i] << 8) | data[i + 1]
-            i += seg_len
-    except (IndexError, ValueError):
-        pass
-    return 0, 0
-
-
-def _find_unique_rid(rels_xml: str) -> str:
-    existing = set(re.findall(r'Id="(rId\d+)"', rels_xml))
-    for n in range(200, 999):
-        rid = f'rId{n}'
-        if rid not in existing:
-            return rid
-    return 'rId998'
-
-
-def _ensure_drawing_namespaces(doc_xml: str) -> str:
-    """Add wp:, a:, pic: namespace declarations if not already present."""
-    NS_NEEDED = [
-        ('xmlns:r',   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'),
-        ('xmlns:wp',  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'),
-        ('xmlns:a',   'http://schemas.openxmlformats.org/drawingml/2006/main'),
-        ('xmlns:pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture'),
-    ]
-    doc_start = doc_xml.find('<w:document')
-    if doc_start == -1:
-        return doc_xml
-    tag_end = doc_xml.find('>', doc_start)
-    if tag_end == -1:
-        return doc_xml
-    opening_tag = doc_xml[doc_start:tag_end]
-    # Use f'{attr}=' to avoid substring false positives (e.g. xmlns:a matching xmlns:aink)
-    additions = [f'{attr}="{uri}"' for attr, uri in NS_NEEDED if f'{attr}=' not in opening_tag]
-    if not additions:
-        return doc_xml
-    return doc_xml[:tag_end] + ' ' + ' '.join(additions) + doc_xml[tag_end:]
-
-
 def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) -> bytes:
-    """Append a new page with the bank account image to the docx."""
-    MAX_WIDTH_EMU = 5_500_000
-    w_px, h_px = _jpeg_dimensions(img_data)
-    if w_px and h_px:
-        cx = MAX_WIDTH_EMU
-        cy = int(MAX_WIDTH_EMU * h_px / w_px)
-    else:
-        cx, cy = MAX_WIDTH_EMU, int(MAX_WIDTH_EMU * 2 / 3)
+    """Append a new page with the bank account image using python-docx."""
+    from docx import Document
+    from docx.shared import Inches
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 
-    media_path = f'word/media/{img_filename}'
-    rels_path = 'word/_rels/document.xml.rels'
+    doc = Document(io.BytesIO(docx_bytes))
 
-    in_buf = io.BytesIO(docx_bytes)
-    out_buf = io.BytesIO()
+    para = doc.add_paragraph()
+    run = para.add_run()
+    br = OxmlElement('w:br')
+    br.set(qn('w:type'), 'page')
+    run._r.append(br)
 
-    with zipfile.ZipFile(in_buf) as zin:
-        try:
-            rels_xml = zin.read(rels_path).decode('utf-8')
-        except KeyError:
-            rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                        '</Relationships>')
+    para = doc.add_paragraph()
+    run = para.add_run()
+    run.add_picture(io.BytesIO(img_data), width=Inches(6))
 
-        rid = _find_unique_rid(rels_xml)
-        new_rel = (f'<Relationship Id="{rid}" '
-                   f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
-                   f'Target="media/{img_filename}"/>')
-        rels_xml = rels_xml.replace('</Relationships>', new_rel + '</Relationships>')
-
-        doc_xml = zin.read('word/document.xml').decode('utf-8')
-        doc_xml = _ensure_drawing_namespaces(doc_xml)
-
-        # Register JPEG content type in [Content_Types].xml if missing
-        CT_PATH = '[Content_Types].xml'
-        ct_xml_updated = None
-        try:
-            ct_raw = zin.read(CT_PATH).decode('utf-8')
-            if 'Extension="jpg"' not in ct_raw and 'Extension="jpeg"' not in ct_raw:
-                ct_xml_updated = ct_raw.replace(
-                    '</Types>',
-                    '<Default Extension="jpg" ContentType="image/jpeg"/></Types>',
-                )
-        except KeyError:
-            pass
-
-        img_para = (
-            f'<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
-            f'<w:p>'
-            f'<w:r><w:drawing>'
-            f'<wp:inline distT="0" distB="0" distL="0" distR="0">'
-            f'<wp:extent cx="{cx}" cy="{cy}"/>'
-            f'<wp:effectExtent l="0" t="0" r="0" b="0"/>'
-            f'<wp:docPr id="9901" name="bank_account"/>'
-            f'<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
-            f'<a:graphic>'
-            f'<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
-            f'<pic:pic>'
-            f'<pic:nvPicPr>'
-            f'<pic:cNvPr id="9902" name="bank_account"/>'
-            f'<pic:cNvPicPr><a:picLocks noChangeAspect="1" noChangeArrowheads="1"/></pic:cNvPicPr>'
-            f'</pic:nvPicPr>'
-            f'<pic:blipFill>'
-            f'<a:blip r:embed="{rid}"/>'
-            f'<a:stretch><a:fillRect/></a:stretch>'
-            f'</pic:blipFill>'
-            f'<pic:spPr bwMode="auto">'
-            f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
-            f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
-            f'<a:noFill/><a:ln><a:noFill/></a:ln>'
-            f'</pic:spPr>'
-            f'</pic:pic>'
-            f'</a:graphicData>'
-            f'</a:graphic>'
-            f'</wp:inline>'
-            f'</w:drawing></w:r></w:p>'
-        )
-
-        # Insert before <w:sectPr> (which must be last in <w:body>)
-        sect_m = re.search(r'<w:sectPr[\s>]', doc_xml)
-        insert_pos = sect_m.start() if sect_m else doc_xml.rfind('</w:body>')
-        doc_xml = doc_xml[:insert_pos] + img_para + doc_xml[insert_pos:]
-
-        with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.infolist():
-                if item.filename == media_path:
-                    continue
-                data = zin.read(item.filename)
-                if item.filename == 'word/document.xml':
-                    data = doc_xml.encode('utf-8')
-                elif item.filename == rels_path:
-                    data = rels_xml.encode('utf-8')
-                elif item.filename == CT_PATH and ct_xml_updated:
-                    data = ct_xml_updated.encode('utf-8')
-                zout.writestr(item, data)
-            zout.writestr(media_path, img_data)
-
-    return out_buf.getvalue()
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
 
 
 def validate_xml(xml_str: str) -> None:
