@@ -732,6 +732,7 @@ def _find_unique_rid(rels_xml: str) -> str:
 def _ensure_drawing_namespaces(doc_xml: str) -> str:
     """Add wp:, a:, pic: namespace declarations if not already present."""
     NS_NEEDED = [
+        ('xmlns:r',   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'),
         ('xmlns:wp',  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'),
         ('xmlns:a',   'http://schemas.openxmlformats.org/drawingml/2006/main'),
         ('xmlns:pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture'),
