@@ -207,6 +207,11 @@ def detect_main_font(xml: str) -> str:
     return collections.Counter(candidates).most_common(1)[0][0]
 
 
+# Old name before company restructuring → canonical current name
+_COMPANY_ALIASES = {
+    '志昌資產管理有限公司': '志昌資產管理股份有限公司',
+}
+
 _COMPANY_SHORT = {
     '志昌': '志昌資產管理股份有限公司',
     '瀚昱': '瀚昱開發股份有限公司',
@@ -218,11 +223,18 @@ def detect_company(plain_text: str) -> Optional[str]:
     for name in COMPANIES:
         if name in plain_text:
             return name
+    # Try known old/alias names (e.g. 志昌改名前：志昌資產管理有限公司)
+    for alias, canonical in _COMPANY_ALIASES.items():
+        if alias in plain_text:
+            return canonical
     # Fallback: OOXML may insert spaces mid-name; try compact text
     compact = re.sub(r'\s+', '', plain_text)
     for name in COMPANIES:
         if re.sub(r'\s+', '', name) in compact:
             return name
+    for alias, canonical in _COMPANY_ALIASES.items():
+        if re.sub(r'\s+', '', alias) in compact:
+            return canonical
     # Last resort: match on short distinctive prefix
     for short, full in _COMPANY_SHORT.items():
         if short in plain_text or short in compact:
