@@ -85,6 +85,13 @@ USPACE_SIG_FIELDS = [
 
 PIC_DIR = os.path.join(os.path.dirname(__file__), 'pic')
 
+NEW_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
+NEW_TEMPLATE_FILES = {
+    '志昌資產管理股份有限公司': '志昌-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
+    '瀚昱開發股份有限公司': '瀚昱-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
+    '毅源開發股份有限公司': '毅源-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
+}
+
 BANK_IMAGES = {
     '瀚昱開發股份有限公司': '瀚昱-凱基城東.jpg',
     '毅源開發股份有限公司': '毅源-凱基城東.jpg',
@@ -720,6 +727,195 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
     return buf.getvalue()
 
 
+def accept_tracked_changes(xml: str) -> str:
+    """Accept all tracked changes: remove deleted content, unwrap inserted content.
+
+    Self-closing <w:del/> and <w:ins/> tags are paragraph-mark tracking markers
+    and must be removed BEFORE the main pattern to prevent the greedy regex from
+    treating them as opening tags and consuming everything up to a real </w:del>.
+    """
+    # Self-closing markers (paragraph mark deletions/insertions) — remove entirely
+    xml = re.sub(r'<w:del\b[^>]*/>', '', xml)
+    xml = re.sub(r'<w:ins\b[^>]*/>', '', xml)
+    # Proper block deletions — remove content
+    xml = re.sub(r'<w:del\b[^>]*>.*?</w:del>', '', xml, flags=re.DOTALL)
+    # Proper block insertions — keep content, remove wrapper
+    xml = re.sub(r'<w:ins\b[^>]*>(.*?)</w:ins>', r'\1', xml, flags=re.DOTALL)
+    return xml
+
+
+def detect_contract_type(plain_text: str) -> str:
+    """Detect if old contract is rent (租金) or profit (分潤) type."""
+    if '停車位租賃契約書' in plain_text or '租金採' in plain_text:
+        return 'rent'
+    return 'profit'
+
+
+def extract_old_data(plain_text: str) -> dict:
+    """Extract address, spots, dates, and fee info from old contract plain text."""
+    data = {}
+
+    m = re.search(r'坐落於(.+?)，共計(\d+)格', plain_text)
+    if m:
+        data['address'] = m.group(1).strip()
+        data['spots'] = m.group(2)
+
+    m = re.search(r'自民國（下同）(.+?)（下稱「生效日」）起至(.+?)（下稱「到期日」）止', plain_text)
+    if m:
+        data['start_date'] = m.group(1).strip()
+        data['end_date'] = m.group(2).strip()
+
+    data['type'] = detect_contract_type(plain_text)
+
+    if data['type'] == 'rent':
+        m = re.search(r'支付新台幣[（(]下同[)）]([\d,，]+)元整', plain_text)
+        if m:
+            data['amount'] = m.group(1)
+    else:
+        m = re.search(r'甲方分得(\d+)%、乙方分得(\d+)%', plain_text)
+        if m:
+            data['party_a_pct'] = m.group(1)
+            data['party_b_pct'] = m.group(2)
+
+    return data
+
+
+def _strip_revision_tracking(xml_fragment: str) -> str:
+    """Remove <w:rPrChange> and <w:pPrChange> elements (revision history metadata).
+    These record PREVIOUS states and don't affect current document rendering.
+    Stripping them prevents nested </w:rPr> / </w:pPr> from confusing simple regex extraction.
+    """
+    xml_fragment = re.sub(r'<w:rPrChange\b.*?</w:rPrChange>', '', xml_fragment, flags=re.DOTALL)
+    xml_fragment = re.sub(r'<w:pPrChange\b.*?</w:pPrChange>', '', xml_fragment, flags=re.DOTALL)
+    return xml_fragment
+
+
+def _get_para_rpr(para_xml: str, default_font: str = '標楷體') -> str:
+    """Get rPr from first run in paragraph.
+    para_xml must already have revision tracking stripped (_strip_revision_tracking).
+    """
+    rpr_match = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
+    if rpr_match:
+        return f'<w:rPr>{rpr_match.group(1)}</w:rPr>'
+    return (f'<w:rPr>'
+            f'<w:rFonts w:ascii="{default_font}" w:eastAsia="{default_font}"'
+            f' w:hAnsi="{default_font}" w:cs="Times New Roman"/>'
+            f'<w:color w:val="000000"/>'
+            f'</w:rPr>')
+
+
+def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str) -> str:
+    """Rebuild paragraph with new_text in a single run, preserving pPr and rPr.
+    Strips revision tracking metadata before extracting formatting so that nested
+    closing tags inside <w:rPrChange>/<w:pPrChange> don't truncate the result.
+    """
+    para_xml = _strip_revision_tracking(xml[ps:pe])
+    ppr = get_ppr(para_xml)
+    rpr = _get_para_rpr(para_xml)
+    new_para = (f'<w:p>{ppr}'
+                f'<w:r>{rpr}'
+                f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
+                f'</w:r></w:p>')
+    return xml[:ps] + new_para + xml[pe:]
+
+
+def _find_para_by_text(paras: list, keyword1: str, keyword2: str = None) -> int:
+    """Return index of first paragraph containing keyword1 (and optionally keyword2)."""
+    for i, (ps, pe, text) in enumerate(paras):
+        if keyword1 in text and (keyword2 is None or keyword2 in text):
+            return i
+    return -1
+
+
+def _fill_address_spots(xml: str, paras: list, address: str, spots: str) -> str:
+    idx = _find_para_by_text(paras, '坐落於', '格停車格')
+    if idx == -1:
+        return xml
+    ps, pe, text = paras[idx]
+    new_text = re.sub(r'坐落於[\s]*，共計[\s]*格', f'坐落於{address}，共計{spots}格', text)
+    return _rebuild_para_text(xml, ps, pe, new_text)
+
+
+def _fill_dates(xml: str, paras: list, start_date: str, end_date: str) -> str:
+    idx = _find_para_by_text(paras, '生效日', '到期日')
+    if idx == -1:
+        return xml
+    ps, pe, _ = paras[idx]
+    new_text = (f'自民國（下同）{start_date}（下稱「生效日」）起至'
+                f'{end_date}（下稱「到期日」）止。')
+    return _rebuild_para_text(xml, ps, pe, new_text)
+
+
+def _mark_mode(xml: str, paras: list, mode: str) -> str:
+    """Replace the □ list bullet with ■ for the selected mode title paragraph.
+    Removes <w:numPr> from pPr so the list's □ doesn't appear alongside ■.
+    """
+    mode_kw = {'A': '模式 A', 'B': '模式 B', 'C': '模式 C'}
+    kw = mode_kw.get(mode)
+    if not kw:
+        return xml
+    idx = _find_para_by_text(paras, kw, '：')
+    if idx == -1:
+        return xml
+    ps, pe, text = paras[idx]
+    para_xml = _strip_revision_tracking(xml[ps:pe])
+    ppr = get_ppr(para_xml)
+    ppr = re.sub(r'<w:numPr>.*?</w:numPr>', '', ppr, flags=re.DOTALL)
+    rpr = _get_para_rpr(para_xml)
+    new_para = (f'<w:p>{ppr}'
+                f'<w:r>{rpr}'
+                f'<w:t xml:space="preserve">{xml_escape("■ " + text)}</w:t>'
+                f'</w:r></w:p>')
+    return xml[:ps] + new_para + xml[pe:]
+
+
+def _fill_mode_a_amount(xml: str, paras: list, amount: str) -> str:
+    idx = _find_para_by_text(paras, '固定新台幣', '元整')
+    if idx == -1:
+        return xml
+    ps, pe, text = paras[idx]
+    new_text = re.sub(r'(新台幣)[\s]*(元整)', f'\\g<1>{amount}\\g<2>', text)
+    return _rebuild_para_text(xml, ps, pe, new_text)
+
+
+def _fill_mode_b_pct(xml: str, paras: list, party_a_pct: str, party_b_pct: str) -> str:
+    idx = _find_para_by_text(paras, '甲方分得', '乙方分得')
+    if idx == -1:
+        return xml
+    ps, pe, text = paras[idx]
+    new_text = re.sub(r'甲方分得[\s]*＿%', f'甲方分得{party_a_pct}%', text)
+    new_text = re.sub(r'乙方分得[\s]*＿%', f'乙方分得{party_b_pct}%', new_text)
+    return _rebuild_para_text(xml, ps, pe, new_text)
+
+
+def fill_new_template(template_xml: str, data: dict) -> str:
+    """Fill blanks in new 合作協議書 template with extracted data."""
+    xml = accept_tracked_changes(template_xml)
+    paras = list_paragraphs(xml)
+
+    if 'address' in data and 'spots' in data:
+        xml = _fill_address_spots(xml, paras, data['address'], data['spots'])
+        paras = list_paragraphs(xml)
+
+    if 'start_date' in data and 'end_date' in data:
+        xml = _fill_dates(xml, paras, data['start_date'], data['end_date'])
+        paras = list_paragraphs(xml)
+
+    contract_type = data.get('type', 'rent')
+    if contract_type == 'rent':
+        xml = _mark_mode(xml, paras, 'A')
+        paras = list_paragraphs(xml)
+        if 'amount' in data:
+            xml = _fill_mode_a_amount(xml, paras, data['amount'])
+    else:
+        xml = _mark_mode(xml, paras, 'B')
+        paras = list_paragraphs(xml)
+        if 'party_a_pct' in data and 'party_b_pct' in data:
+            xml = _fill_mode_b_pct(xml, paras, data['party_a_pct'], data['party_b_pct'])
+
+    return xml
+
+
 def validate_xml(xml_str: str) -> None:
     """Raise ValueError if XML is not well-formed."""
     try:
@@ -731,60 +927,53 @@ def validate_xml(xml_str: str) -> None:
 
 def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str = '') -> tuple:
     """
-    Convert a 對業主 contract to a 對悠勢 contract.
+    Convert a 對業主 contract to the new 合作協議書 format.
+    Detects company and contract type from input, loads corresponding new template,
+    fills in address/spots/dates/fee data extracted from the old contract.
     Returns (output_bytes, output_filename).
     Raises ValueError for user-facing errors.
     """
     with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
-        xml = z.read('word/document.xml').decode('utf-8')
-        try:
-            styles_xml = z.read('word/styles.xml').decode('utf-8')
-        except KeyError:
-            styles_xml = ''
+        input_xml = z.read('word/document.xml').decode('utf-8')
 
-    plain = get_plain_text(xml)
+    plain = get_plain_text(input_xml)
+
     company_name = detect_company(plain)
     if not company_name:
         raise ValueError('無法識別合約中的公司（志昌／瀚昱／毅源），請確認上傳的是對業主合約')
-    income_code = '00發票'
 
-    company = COMPANIES[company_name]
+    data = extract_old_data(plain)
 
-    font = detect_main_font(xml + styles_xml)
-    xml = update_header_parties(xml, company_name, font=font)
-    xml = fill_bank_account(xml, company)
-    xml = replace_signature_section(xml, company, font=font)
-    xml = _fix_income_code_for_uspace(xml)
+    template_filename = NEW_TEMPLATE_FILES.get(company_name)
+    if not template_filename:
+        raise ValueError(f'找不到 {company_name} 的新合約範本')
 
-    validate_xml(xml)
+    template_path = os.path.join(NEW_TEMPLATES_DIR, template_filename)
+    if not os.path.exists(template_path):
+        raise ValueError(f'新合約範本檔案不存在：{template_filename}')
+
+    with open(template_path, 'rb') as f:
+        template_bytes = f.read()
+
+    with zipfile.ZipFile(io.BytesIO(template_bytes)) as z:
+        template_xml = z.read('word/document.xml').decode('utf-8')
+
+    filled_xml = fill_new_template(template_xml, data)
+
+    validate_xml(filled_xml)
 
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(docx_bytes), 'r') as zin, \
+    with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin, \
          zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
-            data = zin.read(item.filename)
+            item_data = zin.read(item.filename)
             if item.filename == 'word/document.xml':
-                data = _strip_highlights(xml).encode('utf-8')
-            elif item.filename == 'word/styles.xml':
-                data = _strip_highlights(data.decode('utf-8')).encode('utf-8')
-            elif item.filename.startswith('word/header') and income_code:
-                hdr = data.decode('utf-8')
-                hdr = update_header_income_code(hdr, income_code)
-                data = hdr.encode('utf-8')
-            zout.writestr(item, data)
+                item_data = filled_xml.encode('utf-8')
+            zout.writestr(item, item_data)
 
     output_bytes = output.getvalue()
 
-    # Append bank account image page if available for this company
-    img_filename = BANK_IMAGES.get(company_name)
-    if img_filename:
-        img_path = os.path.join(PIC_DIR, img_filename)
-        if os.path.exists(img_path):
-            with open(img_path, 'rb') as f:
-                img_data = f.read()
-            output_bytes = _append_bank_image(output_bytes, img_data, img_filename)
-
     base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
-    output_filename = f'{base}(對悠勢合約).docx'
+    output_filename = f'{base}(合作協議書).docx'
 
     return output_bytes, output_filename
