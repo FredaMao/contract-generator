@@ -207,10 +207,26 @@ def detect_main_font(xml: str) -> str:
     return collections.Counter(candidates).most_common(1)[0][0]
 
 
+_COMPANY_SHORT = {
+    '志昌': '志昌資產管理股份有限公司',
+    '瀚昱': '瀚昱開發股份有限公司',
+    '毅源': '毅源開發股份有限公司',
+}
+
 def detect_company(plain_text: str) -> Optional[str]:
+    # First try full name (fast path)
     for name in COMPANIES:
         if name in plain_text:
             return name
+    # Fallback: OOXML may insert spaces mid-name; try compact text
+    compact = re.sub(r'\s+', '', plain_text)
+    for name in COMPANIES:
+        if re.sub(r'\s+', '', name) in compact:
+            return name
+    # Last resort: match on short distinctive prefix
+    for short, full in _COMPANY_SHORT.items():
+        if short in plain_text or short in compact:
+            return full
     return None
 
 
@@ -940,6 +956,9 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
 
     company_name = detect_company(plain)
     if not company_name:
+        # Log first 300 chars of plain text for diagnosis
+        import sys
+        print(f'[converter] detect_company failed. plain[:300]={plain[:300]!r}', file=sys.stderr)
         raise ValueError('無法識別合約中的公司（志昌／瀚昱／毅源），請確認上傳的是對業主合約')
 
     data = extract_old_data(plain)
