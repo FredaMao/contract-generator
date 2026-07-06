@@ -774,7 +774,16 @@ def accept_tracked_changes(xml: str) -> str:
 
 def detect_contract_type(plain_text: str) -> str:
     """Detect if old contract is rent (租金) or profit (分潤) type."""
-    if '停車位租賃契約書' in plain_text or '租金採' in plain_text:
+    # Profit ratio is the strongest signal — check first.
+    # (分潤 contracts also mention "停車位租賃契約書" in their preamble, so
+    #  matching on the title alone would cause false positives.)
+    if re.search(r'甲方分得\s*\d+\s*%', plain_text):
+        return 'profit'
+    if '租金採' in plain_text:
+        return 'rent'
+    if re.search(r'支付新台幣[（(]下同[)）]\s*[\d,，]+元整', plain_text):
+        return 'rent'
+    if '停車位租賃契約書' in plain_text:
         return 'rent'
     return 'profit'
 
@@ -990,6 +999,68 @@ def fill_new_template(template_xml: str, data: dict) -> str:
     return xml
 
 
+def _parse_header_plain(plain: str, fields: dict) -> None:
+    """Extract individual header field values from plain text into fields dict."""
+    m = re.search(r'負責業務[：:]\s*(\S+)', plain)
+    if m and 'sales' not in fields:
+        fields['sales'] = m.group(1).strip()
+
+    m = re.search(r'建物編號[：:]\s*([A-Za-z]\d+)', plain)
+    if m and 'building_id' not in fields:
+        fields['building_id'] = m.group(1).strip()
+
+    m = re.search(r'建物名稱[：:]\s*(.+?)(?=\s+建物綁定電話|\s+所得代號|$)', plain)
+    if m and 'building_name' not in fields:
+        val = m.group(1).strip()
+        if val:
+            fields['building_name'] = val
+
+    m = re.search(r'建物綁定電話[：:]\s*([\d\-]+)', plain)
+    if m and 'building_phone' not in fields:
+        fields['building_phone'] = m.group(1).strip()
+
+    m = re.search(r'所得代號[：:]\s*([^\s]+(?:\([^)]*\))?)', plain)
+    if m and 'income_code' not in fields:
+        fields['income_code'] = m.group(1).strip()
+
+
+def _extract_header_fields(docx_bytes: bytes) -> dict:
+    """Extract sales/building fields from old contract header XML (and body fallback)."""
+    fields = {}
+    with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+        for name in sorted(z.namelist()):
+            if re.match(r'word/header\d+\.xml', name):
+                plain = get_plain_text(z.read(name).decode('utf-8'))
+                _parse_header_plain(plain, fields)
+        if len(fields) < 2:
+            plain = get_plain_text(z.read('word/document.xml').decode('utf-8'))[:600]
+            _parse_header_plain(plain, fields)
+    return fields
+
+
+_HEADER_FIELD_MAP = [
+    ('負責業務：',    'sales'),
+    ('建物編號：',    'building_id'),
+    ('建物名稱：',    'building_name'),
+    ('建物綁定電話：', 'building_phone'),
+    ('所得代號：',    'income_code'),
+]
+
+
+def _fill_template_header(header_xml: str, fields: dict) -> str:
+    """Replace blank label paragraphs in new template header XML with label+value."""
+    if not fields:
+        return header_xml
+    paras = list_paragraphs(header_xml)
+    for ps, pe, text in reversed(paras):
+        for label, field_key in _HEADER_FIELD_MAP:
+            if label in text and field_key in fields:
+                new_text = label + fields[field_key]
+                header_xml = _rebuild_para_text(header_xml, ps, pe, new_text)
+                break
+    return header_xml
+
+
 def validate_xml(xml_str: str) -> None:
     """Raise ValueError if XML is not well-formed."""
     try:
@@ -1039,6 +1110,8 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
 
     validate_xml(filled_xml)
 
+    header_fields = _extract_header_fields(docx_bytes)
+
     output = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin, \
          zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
@@ -1046,6 +1119,9 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
             item_data = zin.read(item.filename)
             if item.filename == 'word/document.xml':
                 item_data = filled_xml.encode('utf-8')
+            elif re.match(r'word/header\d+\.xml', item.filename) and header_fields:
+                hxml = _fill_template_header(item_data.decode('utf-8'), header_fields)
+                item_data = hxml.encode('utf-8')
             zout.writestr(item, item_data)
 
     output_bytes = output.getvalue()
