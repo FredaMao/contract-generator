@@ -6,7 +6,7 @@ import zipfile
 from docxtpl import DocxTemplate
 from converter import xml_escape, list_paragraphs
 
-FONT = '微軟正黑體'
+FONT = '標楷體'
 
 COMPANIES = {
     '志昌': {

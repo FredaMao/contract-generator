@@ -799,6 +799,14 @@ def extract_old_data(plain_text: str) -> dict:
         m = re.search(r'支付新台幣[（(]下同[)）]([\d,，]+)元整', plain_text)
         if m:
             data['amount'] = m.group(1)
+
+        # Payment period: 月/半年/季/年
+        m = re.search(r'租金採(半年|季|年|月)[結繳]制', plain_text)
+        data['pay_period'] = m.group(1) if m else '月'
+
+        # Payment day: e.g. "每期5日，" — blank ("__日") won't match, defaults to '1'
+        m = re.search(r'每期\s*(\d+)\s*日[，,、]', plain_text)
+        data['pay_day'] = m.group(1) if m else '1'
     else:
         m = re.search(r'甲方分得(\d+)%、乙方分得(\d+)%', plain_text)
         if m:
@@ -916,6 +924,42 @@ def _fill_mode_b_pct(xml: str, paras: list, party_a_pct: str, party_b_pct: str) 
     return _rebuild_para_text(xml, ps, pe, new_text)
 
 
+_PERIOD_MAP = {
+    '月':   ('月結制', '一（1）個月'),
+    '半年': ('半年繳制', '六（6）個月'),
+    '季':   ('季繳制', '三（3）個月'),
+    '年':   ('年繳制', '十二（12）個月'),
+}
+
+
+def _fill_payment_period(xml: str, paras: list, pay_period: str, pay_day: str) -> str:
+    """Replace payment period description in Mode A and update payment day."""
+    period_label, period_months = _PERIOD_MAP.get(pay_period, _PERIOD_MAP['月'])
+
+    # Sub-item (1): replace "採月結制，即以每一（1）個月為一期"
+    idx = _find_para_by_text(paras, '月結制', '個月為一期')
+    if idx != -1:
+        ps, pe, text = paras[idx]
+        new_text = re.sub(
+            r'採月結制，即以每一（1）個月為一期',
+            f'採{period_label}，即以每{period_months}為一期',
+            text,
+        )
+        if new_text != text:
+            xml = _rebuild_para_text(xml, ps, pe, new_text)
+            paras = list_paragraphs(xml)
+
+    # Sub-item (2): replace payment day "每期 X 日"
+    idx = _find_para_by_text(paras, '乙方應於每期', '日，以匯款方式')
+    if idx != -1:
+        ps, pe, text = paras[idx]
+        new_text = re.sub(r'每期\s*\d+\s*日', f'每期{pay_day}日', text)
+        if new_text != text:
+            xml = _rebuild_para_text(xml, ps, pe, new_text)
+
+    return xml
+
+
 def fill_new_template(template_xml: str, data: dict) -> str:
     """Fill blanks in new 合作協議書 template with extracted data."""
     xml = accept_tracked_changes(template_xml)
@@ -932,6 +976,8 @@ def fill_new_template(template_xml: str, data: dict) -> str:
     contract_type = data.get('type', 'rent')
     if contract_type == 'rent':
         xml = _mark_mode(xml, paras, 'A')
+        paras = list_paragraphs(xml)
+        xml = _fill_payment_period(xml, paras, data.get('pay_period', '月'), data.get('pay_day', '1'))
         paras = list_paragraphs(xml)
         if 'amount' in data:
             xml = _fill_mode_a_amount(xml, paras, data['amount'])
