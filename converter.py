@@ -1000,28 +1000,39 @@ def fill_new_template(template_xml: str, data: dict) -> str:
 
 
 def _parse_header_plain(plain: str, fields: dict) -> None:
-    """Extract individual header field values from plain text into fields dict."""
-    m = re.search(r'負責業務[：:]\s*(\S+)', plain)
+    """Extract header field values from plain text.
+
+    Header cells are concatenated without whitespace in plain text, so each
+    pattern uses a lookahead to stop before the next label.  Values that still
+    contain '：' (a label character) are discarded as blank-template noise.
+    """
+    def _valid(val: str, max_len: int = 20) -> bool:
+        return bool(val) and '：' not in val and ':' not in val and len(val) <= max_len
+
+    m = re.search(r'負責業務[：:]\s*(.+?)(?=建物編號|分潤|租賃|$)', plain)
     if m and 'sales' not in fields:
-        fields['sales'] = m.group(1).strip()
+        val = m.group(1).strip()
+        if _valid(val, max_len=10):
+            fields['sales'] = val
 
     m = re.search(r'建物編號[：:]\s*([A-Za-z]\d+)', plain)
     if m and 'building_id' not in fields:
-        fields['building_id'] = m.group(1).strip()
+        fields['building_id'] = m.group(1)
 
-    m = re.search(r'建物名稱[：:]\s*(.+?)(?=\s+建物綁定電話|\s+所得代號|$)', plain)
+    m = re.search(r'建物名稱[：:]\s*(.+?)(?=建物綁定|所得代號|$)', plain)
     if m and 'building_name' not in fields:
         val = m.group(1).strip()
-        if val:
+        if _valid(val, max_len=20):
             fields['building_name'] = val
 
     m = re.search(r'建物綁定電話[：:]\s*([\d\-]+)', plain)
     if m and 'building_phone' not in fields:
-        fields['building_phone'] = m.group(1).strip()
+        fields['building_phone'] = m.group(1)
 
-    m = re.search(r'所得代號[：:]\s*([^\s]+(?:\([^)]*\))?)', plain)
-    if m and 'income_code' not in fields:
-        fields['income_code'] = m.group(1).strip()
+    # 稅前/稅後 — just the suffix, prefix is always 分潤 in 合作協議書
+    m = re.search(r'(?:分潤|租賃)稅(前|後)', plain)
+    if m and 'tax_suffix' not in fields:
+        fields['tax_suffix'] = m.group(1)
 
 
 def _extract_header_fields(docx_bytes: bytes) -> dict:
@@ -1043,21 +1054,46 @@ _HEADER_FIELD_MAP = [
     ('建物編號：',    'building_id'),
     ('建物名稱：',    'building_name'),
     ('建物綁定電話：', 'building_phone'),
-    ('所得代號：',    'income_code'),
 ]
+
+_INCOME_CODE_HEADER = '一般法人(00發票)'
 
 
 def _fill_template_header(header_xml: str, fields: dict) -> str:
-    """Replace blank label paragraphs in new template header XML with label+value."""
-    if not fields:
-        return header_xml
-    paras = list_paragraphs(header_xml)
-    for ps, pe, text in reversed(paras):
-        for label, field_key in _HEADER_FIELD_MAP:
-            if label in text and field_key in fields:
-                new_text = label + fields[field_key]
-                header_xml = _rebuild_para_text(header_xml, ps, pe, new_text)
-                break
+    """Fill header fields via direct <w:t> text injection.
+
+    Operates on the raw text within existing <w:t> elements so that ALL XML
+    structure (w14:paraId, formatting, table cells) is fully preserved.
+    """
+    # Inject values copied from old contract
+    for label, field_key in _HEADER_FIELD_MAP:
+        if field_key not in fields:
+            continue
+        value = xml_escape(fields[field_key])
+        header_xml = re.sub(
+            r'(<w:t[^>]*>)(' + re.escape(label) + r')(</w:t>)',
+            lambda m, v=value: m.group(1) + m.group(2) + v + m.group(3),
+            header_xml,
+            count=1,
+        )
+
+    # 所得代號 is always 一般法人(00發票) in 合作協議書 (甲方 is always a legal entity)
+    header_xml = re.sub(
+        r'(<w:t[^>]*>)(所得代號[：:])(</w:t>)',
+        lambda m: m.group(1) + m.group(2) + xml_escape(_INCOME_CODE_HEADER) + m.group(3),
+        header_xml,
+        count=1,
+    )
+
+    # Update 稅前/稅後 from old contract (template defaults to 分潤稅前)
+    if fields.get('tax_suffix') == '後':
+        header_xml = re.sub(
+            r'(<w:t[^>]*>)((?:分潤|租賃)稅)前(</w:t>)',
+            lambda m: m.group(1) + m.group(2) + '後' + m.group(3),
+            header_xml,
+            count=1,
+        )
+
     return header_xml
 
 
