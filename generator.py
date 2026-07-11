@@ -47,7 +47,7 @@ _OPTIONAL_BLANKS = {
     'amount':                 '________',
     'pay_freq':               '____',
     'pay_period':             '__',
-    'pay_method':             '______',
+    'pay_method':             '匯款',
     'min_guarantee':          '________',
     'excess_threshold':       '________',
     'excess_party_a_percent': '__',
@@ -91,13 +91,18 @@ def _apply_font_xml(xml: str) -> str:
 def _override_fonts(docx_bytes: bytes) -> bytes:
     in_buf = io.BytesIO(docx_bytes)
     out_buf = io.BytesIO()
-    targets = {'word/document.xml', 'word/styles.xml'}
+    font_targets = {'word/document.xml', 'word/styles.xml'}
     with zipfile.ZipFile(in_buf) as zin:
         with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
                 data = zin.read(item.filename)
-                if item.filename in targets:
-                    data = _apply_font_xml(data.decode('utf-8')).encode('utf-8')
+                if item.filename.endswith('.xml'):
+                    xml_str = data.decode('utf-8')
+                    if item.filename in font_targets:
+                        xml_str = _apply_font_xml(xml_str)
+                    # Normalise all ballot-box characters to filled/empty squares
+                    xml_str = xml_str.replace('☑', '■').replace('☐', '□')
+                    data = xml_str.encode('utf-8')
                 zout.writestr(item, data)
     return out_buf.getvalue()
 
@@ -181,14 +186,16 @@ def _apply_date_format(xml: str, sign_date: str = '') -> str:
     """Set signing date line to font size 20; inject sign_date when provided."""
     DATE_TEXT = '中　華　民　國　　　年　　月　　日'
     paragraphs = list_paragraphs(xml)
-    total = len(paragraphs)
-    for i, (ps, pe, text) in enumerate(paragraphs):
-        if i < total // 2:
-            continue
+    # Take the LAST occurrence — the signing date is always at the document end;
+    # earlier occurrences (e.g. in article clauses) must not be overwritten.
+    last_match = None
+    for ps, pe, text in paragraphs:
         if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
-            new_text = ('中　華　民　國　' + sign_date) if sign_date else DATE_TEXT
-            xml = _rebuild_para_text(xml, ps, pe, new_text, size=20)
-            break
+            last_match = (ps, pe)
+    if last_match:
+        ps, pe = last_match
+        new_text = ('中　華　民　國　' + sign_date) if sign_date else DATE_TEXT
+        xml = _rebuild_para_text(xml, ps, pe, new_text, size=20)
     return xml
 
 
@@ -291,15 +298,17 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     ctx['ic_committee_00']  = (ic_full == '管委會_00發票')
 
     # Mode selection checkboxes (body)
-    ctx['mode_a_check'] = '☑' if mode == 'a' else '☐'
-    ctx['mode_b_check'] = '☑' if mode == 'b' else '☐'
-    ctx['mode_c_check'] = '☑' if mode == 'c' else '☐'
+    ctx['mode_a_check'] = '■' if mode == 'a' else '□'
+    ctx['mode_b_check'] = '■' if mode == 'b' else '□'
+    ctx['mode_c_check'] = '■' if mode == 'c' else '□'
 
-    # Header checkboxes — computed from mode + tax_type
-    tax = form_data.get('tax_type', '')
-    ctx['fixed_check']      = '☑' if mode in ('a', 'c') else '☐'
-    ctx['profit_inc_check'] = '☑' if mode in ('b', 'c') and tax == '含稅' else '☐'
-    ctx['profit_exc_check'] = '☑' if mode in ('b', 'c') and tax == '未稅' else '☐'
+    # Tax type is always 未稅 for profit-sharing
+    ctx['tax_type'] = '未稅'
+
+    # Header checkboxes — 固定 for mode A/C; 分潤未稅 for mode B/C
+    ctx['fixed_check']      = '■' if mode in ('a', 'c') else '□'
+    ctx['profit_inc_check'] = '□'
+    ctx['profit_exc_check'] = '■' if mode in ('b', 'c') else '□'
 
     # Mode C fields
     ctx['min_guarantee']          = form_data.get('min_guarantee', '').strip()

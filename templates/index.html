@@ -319,25 +319,15 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <label>付款頻率 <span class="req">*</span></label>
                 <select name="pay_freq" onchange="onPayFreqChange(this)">
                     <option value="">請選擇</option>
-                    <option value="月繳">月繳</option>
-                    <option value="季繳">季繳</option>
-                    <option value="半年繳">半年繳</option>
-                    <option value="年繳">年繳</option>
+                    <option value="月結">月結</option>
+                    <option value="季結">季結</option>
+                    <option value="半年結">半年結</option>
+                    <option value="年結">年結</option>
                 </select>
             </div>
             <div class="f uspace-mode-a hidden">
                 <label>付款期間（月數，自動填入）</label>
                 <input type="text" name="pay_period" id="pay-period" readonly placeholder="依付款頻率自動填入">
-            </div>
-
-            <!-- 模式B/C：稅別 -->
-            <div class="f mode-bc-only hidden">
-                <label>稅別 <span class="req">*</span></label>
-                <select name="tax_type">
-                    <option value="">請選擇</option>
-                    <option value="含稅">含稅</option>
-                    <option value="未稅">未稅</option>
-                </select>
             </div>
 
             <!-- 模式B/C：分潤比例 -->
@@ -373,7 +363,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <label>付款方式 <span class="req">*</span></label>
                 <select name="pay_method">
                     <option value="">請選擇</option>
-                    <option value="匯款">匯款</option>
+                    <option value="匯款" selected>匯款</option>
                     <option value="支票">支票</option>
                 </select>
             </div>
@@ -485,7 +475,7 @@ function updateFields() {
 }
 
 // Auto-fill pay_period from pay_freq
-var freqPeriodMap = { '月繳': '1', '季繳': '3', '半年繳': '6', '年繳': '12' };
+var freqPeriodMap = { '月結': '1', '季結': '3', '半年結': '6', '年結': '12' };
 function onPayFreqChange(sel) {
     var el = document.getElementById('pay-period');
     el.value = freqPeriodMap[sel.value] || '';
@@ -527,10 +517,8 @@ function validateForm() {
             chk('pay_method', '付款方式');
         }
     } else if (mode === 'b') {
-        chk('tax_type',        '稅別');
         chk('party_a_percent', '甲方分潤比例');
     } else if (mode === 'c') {
-        chk('tax_type',              '稅別');
         chk('min_guarantee',         '最低保障收益');
         chk('excess_threshold',      '超額門檻');
         chk('excess_party_a_percent','超額甲方比例');
