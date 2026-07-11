@@ -625,6 +625,7 @@ async function doGenerate() {
     // track which radio groups have been handled
     var radiosDone = {};
     document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(function(el) {
+        if (el.closest('.hidden')) return;  // skip fields inside hidden sections
         if (el.type === 'radio') {
             if (!radiosDone[el.name]) {
                 radiosDone[el.name] = true;
