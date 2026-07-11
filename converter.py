@@ -86,11 +86,6 @@ USPACE_SIG_FIELDS = [
 PIC_DIR = os.path.join(os.path.dirname(__file__), 'pic')
 
 NEW_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
-NEW_TEMPLATE_FILES = {
-    '志昌資產管理股份有限公司': '志昌-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
-    '瀚昱開發股份有限公司': '瀚昱-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
-    '毅源開發股份有限公司': '毅源-悠勢_停車場系統管理與技術服務合作協議書_260703.docx',
-}
 
 BANK_IMAGES = {
     '瀚昱開發股份有限公司': '瀚昱-凱基城東.jpg',
@@ -755,297 +750,6 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
     return buf.getvalue()
 
 
-def accept_tracked_changes(xml: str) -> str:
-    """Accept all tracked changes: remove deleted content, unwrap inserted content.
-
-    Self-closing <w:del/> and <w:ins/> tags are paragraph-mark tracking markers
-    and must be removed BEFORE the main pattern to prevent the greedy regex from
-    treating them as opening tags and consuming everything up to a real </w:del>.
-    """
-    # Self-closing markers (paragraph mark deletions/insertions) — remove entirely
-    xml = re.sub(r'<w:del\b[^>]*/>', '', xml)
-    xml = re.sub(r'<w:ins\b[^>]*/>', '', xml)
-    # Proper block deletions — remove content
-    xml = re.sub(r'<w:del\b[^>]*>.*?</w:del>', '', xml, flags=re.DOTALL)
-    # Proper block insertions — keep content, remove wrapper
-    xml = re.sub(r'<w:ins\b[^>]*>(.*?)</w:ins>', r'\1', xml, flags=re.DOTALL)
-    return xml
-
-
-def detect_contract_type(plain_text: str) -> str:
-    """Detect if old contract is rent (租金) or profit (分潤) type."""
-    # Profit ratio is the strongest signal — check first.
-    # (分潤 contracts also mention "停車位租賃契約書" in their preamble, so
-    #  matching on the title alone would cause false positives.)
-    if re.search(r'甲方分得\s*\d+\s*%', plain_text):
-        return 'profit'
-    if '租金採' in plain_text:
-        return 'rent'
-    if re.search(r'支付新台幣[（(]下同[)）]\s*[\d,，]+元整', plain_text):
-        return 'rent'
-    if '停車位租賃契約書' in plain_text:
-        return 'rent'
-    return 'profit'
-
-
-def extract_old_data(plain_text: str) -> dict:
-    """Extract address, spots, dates, and fee info from old contract plain text."""
-    data = {}
-
-    m = re.search(r'坐落於(.+?)，共計(\d+)格', plain_text)
-    if m:
-        data['address'] = m.group(1).strip()
-        data['spots'] = m.group(2)
-
-    m = re.search(r'自民國（下同）(.+?)（下稱「生效日」）起至(.+?)（下稱「到期日」）止', plain_text)
-    if m:
-        data['start_date'] = m.group(1).strip()
-        data['end_date'] = m.group(2).strip()
-
-    data['type'] = detect_contract_type(plain_text)
-
-    if data['type'] == 'rent':
-        m = re.search(r'支付新台幣[（(]下同[)）]([\d,，]+)元整', plain_text)
-        if m:
-            data['amount'] = m.group(1)
-
-        # Payment period: 月/半年/季/年
-        m = re.search(r'租金採(半年|季|年|月)[結繳]制', plain_text)
-        data['pay_period'] = m.group(1) if m else '月'
-
-        # Payment day: e.g. "每期5日，" — blank ("__日") won't match, defaults to '1'
-        m = re.search(r'每期\s*(\d+)\s*日[，,、]', plain_text)
-        data['pay_day'] = m.group(1) if m else '1'
-    else:
-        m = re.search(r'甲方分得(\d+)%、乙方分得(\d+)%', plain_text)
-        if m:
-            data['party_a_pct'] = m.group(1)
-            data['party_b_pct'] = m.group(2)
-
-    return data
-
-
-def _strip_revision_tracking(xml_fragment: str) -> str:
-    """Remove <w:rPrChange> and <w:pPrChange> elements (revision history metadata).
-    These record PREVIOUS states and don't affect current document rendering.
-    Stripping them prevents nested </w:rPr> / </w:pPr> from confusing simple regex extraction.
-    """
-    xml_fragment = re.sub(r'<w:rPrChange\b.*?</w:rPrChange>', '', xml_fragment, flags=re.DOTALL)
-    xml_fragment = re.sub(r'<w:pPrChange\b.*?</w:pPrChange>', '', xml_fragment, flags=re.DOTALL)
-    return xml_fragment
-
-
-def _get_para_rpr(para_xml: str, default_font: str = '標楷體') -> str:
-    """Get rPr from first run in paragraph.
-    para_xml must already have revision tracking stripped (_strip_revision_tracking).
-    """
-    rpr_match = re.search(r'<w:r[\s>].*?<w:rPr>(.*?)</w:rPr>', para_xml, re.DOTALL)
-    if rpr_match:
-        return f'<w:rPr>{rpr_match.group(1)}</w:rPr>'
-    return (f'<w:rPr>'
-            f'<w:rFonts w:ascii="{default_font}" w:eastAsia="{default_font}"'
-            f' w:hAnsi="{default_font}" w:cs="Times New Roman"/>'
-            f'<w:color w:val="000000"/>'
-            f'</w:rPr>')
-
-
-def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str) -> str:
-    """Rebuild paragraph with new_text in a single run, preserving pPr and rPr.
-    Strips revision tracking metadata before extracting formatting so that nested
-    closing tags inside <w:rPrChange>/<w:pPrChange> don't truncate the result.
-    """
-    para_xml = _strip_revision_tracking(xml[ps:pe])
-    ppr = get_ppr(para_xml)
-    rpr = _get_para_rpr(para_xml)
-    new_para = (f'<w:p>{ppr}'
-                f'<w:r>{rpr}'
-                f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
-                f'</w:r></w:p>')
-    return xml[:ps] + new_para + xml[pe:]
-
-
-def _find_para_by_text(paras: list, keyword1: str, keyword2: str = None) -> int:
-    """Return index of first paragraph containing keyword1 (and optionally keyword2)."""
-    for i, (ps, pe, text) in enumerate(paras):
-        if keyword1 in text and (keyword2 is None or keyword2 in text):
-            return i
-    return -1
-
-
-def _fill_address_spots(xml: str, paras: list, address: str, spots: str) -> str:
-    idx = _find_para_by_text(paras, '坐落於', '格停車格')
-    if idx == -1:
-        return xml
-    ps, pe, text = paras[idx]
-    new_text = re.sub(r'坐落於[\s]*，共計[\s]*格', f'坐落於{address}，共計{spots}格', text)
-    return _rebuild_para_text(xml, ps, pe, new_text)
-
-
-def _fill_dates(xml: str, paras: list, start_date: str, end_date: str) -> str:
-    idx = _find_para_by_text(paras, '生效日', '到期日')
-    if idx == -1:
-        return xml
-    ps, pe, _ = paras[idx]
-    new_text = (f'自民國（下同）{start_date}（下稱「生效日」）起至'
-                f'{end_date}（下稱「到期日」）止。')
-    return _rebuild_para_text(xml, ps, pe, new_text)
-
-
-def _mark_mode(xml: str, paras: list, mode: str) -> str:
-    """Replace the □ list bullet with ■ for the selected mode title paragraph.
-    Removes <w:numPr> from pPr so the list's □ doesn't appear alongside ■.
-    """
-    mode_kw = {'A': '模式 A', 'B': '模式 B', 'C': '模式 C'}
-    kw = mode_kw.get(mode)
-    if not kw:
-        return xml
-    idx = _find_para_by_text(paras, kw, '：')
-    if idx == -1:
-        return xml
-    ps, pe, text = paras[idx]
-    para_xml = _strip_revision_tracking(xml[ps:pe])
-    ppr = get_ppr(para_xml)
-    ppr = re.sub(r'<w:numPr>.*?</w:numPr>', '', ppr, flags=re.DOTALL)
-    rpr = _get_para_rpr(para_xml)
-    new_para = (f'<w:p>{ppr}'
-                f'<w:r>{rpr}'
-                f'<w:t xml:space="preserve">{xml_escape("■ " + text)}</w:t>'
-                f'</w:r></w:p>')
-    return xml[:ps] + new_para + xml[pe:]
-
-
-def _fill_mode_a_amount(xml: str, paras: list, amount: str) -> str:
-    idx = _find_para_by_text(paras, '固定新台幣', '元整')
-    if idx == -1:
-        return xml
-    ps, pe, text = paras[idx]
-    new_text = re.sub(r'(新台幣)[\s]*(元整)', f'\\g<1>{amount}\\g<2>', text)
-    return _rebuild_para_text(xml, ps, pe, new_text)
-
-
-def _fill_mode_b_pct(xml: str, paras: list, party_a_pct: str, party_b_pct: str) -> str:
-    idx = _find_para_by_text(paras, '甲方分得', '乙方分得')
-    if idx == -1:
-        return xml
-    ps, pe, text = paras[idx]
-    new_text = re.sub(r'甲方分得[\s]*＿%', f'甲方分得{party_a_pct}%', text)
-    new_text = re.sub(r'乙方分得[\s]*＿%', f'乙方分得{party_b_pct}%', new_text)
-    return _rebuild_para_text(xml, ps, pe, new_text)
-
-
-_PARTY_SFX_PAT = re.compile(r'[（(][^）)]{0,30}[甲乙][　\s]*方[^）)]{0,10}[）)]')
-
-
-def _fix_preamble_party_lines(xml: str) -> str:
-    """Strip underline from party name paragraphs and align （下稱甲方）/（下稱乙方）."""
-    paragraphs = list_paragraphs(xml)
-    jia_info = yi_info = None
-
-    for ps, pe, text in paragraphs[:60]:
-        m = _PARTY_SFX_PAT.search(text)
-        if not m:
-            continue
-        sfx_text = text[m.start():]
-        prefix = text[:m.start()].rstrip('　 ')
-        if '甲方' in sfx_text and jia_info is None:
-            jia_info = (ps, pe, prefix, sfx_text)
-        elif '乙方' in sfx_text and yi_info is None:
-            yi_info = (ps, pe, prefix, sfx_text)
-
-    if not jia_info or not yi_info:
-        return xml
-
-    jia_ps, jia_pe, jia_pre, jia_sfx = jia_info
-    yi_ps,  yi_pe,  yi_pre,  yi_sfx  = yi_info
-    max_len = max(len(jia_pre), len(yi_pre))
-
-    items = [
-        (jia_ps, jia_pe, jia_pre, '　' * (max_len - len(jia_pre)), jia_sfx),
-        (yi_ps,  yi_pe,  yi_pre,  '　' * (max_len - len(yi_pre)),  yi_sfx),
-    ]
-    for ps, pe, pre, padding, sfx in sorted(items, key=lambda x: x[0], reverse=True):
-        para_xml = _strip_revision_tracking(xml[ps:pe])
-        ppr = get_ppr(para_xml)
-        rpr = _get_para_rpr(para_xml)
-        rpr = re.sub(r'<w:u\b[^/]*/>', '', rpr)   # remove underline
-        new_text = pre + padding + sfx
-        new_para = (f'<w:p>{ppr}'
-                    f'<w:r>{rpr}'
-                    f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
-                    f'</w:r></w:p>')
-        xml = xml[:ps] + new_para + xml[pe:]
-
-    return xml
-
-
-_PERIOD_MAP = {
-    '月':   ('月結制', '一（1）個月'),
-    '半年': ('半年繳制', '六（6）個月'),
-    '季':   ('季繳制', '三（3）個月'),
-    '年':   ('年繳制', '十二（12）個月'),
-}
-
-
-def _fill_payment_period(xml: str, paras: list, pay_period: str, pay_day: str) -> str:
-    """Replace payment period description in Mode A and update payment day."""
-    period_label, period_months = _PERIOD_MAP.get(pay_period, _PERIOD_MAP['月'])
-
-    # Sub-item (1): replace "採月結制，即以每一（1）個月為一期"
-    idx = _find_para_by_text(paras, '月結制', '個月為一期')
-    if idx != -1:
-        ps, pe, text = paras[idx]
-        new_text = re.sub(
-            r'採月結制，即以每一（1）個月為一期',
-            f'採{period_label}，即以每{period_months}為一期',
-            text,
-        )
-        if new_text != text:
-            xml = _rebuild_para_text(xml, ps, pe, new_text)
-            paras = list_paragraphs(xml)
-
-    # Sub-item (2): replace payment day "每期 X 日"
-    idx = _find_para_by_text(paras, '乙方應於每期', '日，以匯款方式')
-    if idx != -1:
-        ps, pe, text = paras[idx]
-        new_text = re.sub(r'每期\s*\d+\s*日', f'每期{pay_day}日', text)
-        if new_text != text:
-            xml = _rebuild_para_text(xml, ps, pe, new_text)
-
-    return xml
-
-
-def fill_new_template(template_xml: str, data: dict) -> str:
-    """Fill blanks in new 合作協議書 template with extracted data."""
-    xml = accept_tracked_changes(template_xml)
-    paras = list_paragraphs(xml)
-
-    if 'address' in data and 'spots' in data:
-        xml = _fill_address_spots(xml, paras, data['address'], data['spots'])
-        paras = list_paragraphs(xml)
-
-    if 'start_date' in data and 'end_date' in data:
-        xml = _fill_dates(xml, paras, data['start_date'], data['end_date'])
-        paras = list_paragraphs(xml)
-
-    contract_type = data.get('type', 'rent')
-    if contract_type == 'rent':
-        xml = _mark_mode(xml, paras, 'A')
-        paras = list_paragraphs(xml)
-        xml = _fill_payment_period(xml, paras, data.get('pay_period', '月'), data.get('pay_day', '1'))
-        paras = list_paragraphs(xml)
-        if 'amount' in data:
-            xml = _fill_mode_a_amount(xml, paras, data['amount'])
-    else:
-        xml = _mark_mode(xml, paras, 'B')
-        paras = list_paragraphs(xml)
-        if 'party_a_pct' in data and 'party_b_pct' in data:
-            xml = _fill_mode_b_pct(xml, paras, data['party_a_pct'], data['party_b_pct'])
-
-    xml = _fix_preamble_party_lines(xml)
-
-    return xml
-
-
 def _parse_header_plain(plain: str, fields: dict) -> None:
     """Extract header field values from plain text.
 
@@ -1095,53 +799,227 @@ def _extract_header_fields(docx_bytes: bytes) -> dict:
             _parse_header_plain(plain, fields)
     return fields
 
-
-_HEADER_FIELD_MAP = [
-    ('負責業務：',    'sales'),
-    ('建物編號：',    'building_id'),
-    ('建物名稱：',    'building_name'),
-    ('建物綁定電話：', 'building_phone'),
-]
-
 _INCOME_CODE_HEADER = '一般法人(00發票)'
 
+V2_USPACE_TEMPLATE = os.path.join(
+    NEW_TEMPLATES_DIR, 'NEW',
+    '第三方-悠勢_停車場系統管理與技術服務合作協議書_公版_7.7_V2.docx',
+)
 
-def _fill_template_header(header_xml: str, fields: dict) -> str:
-    """Fill header fields via direct <w:t> text injection.
+_V77_MODE_TITLE = re.compile(r'模式\s*([ABCＡＢＣ])\s*[：:]')
 
-    Operates on the raw text within existing <w:t> elements so that ALL XML
-    structure (w14:paraId, formatting, table cells) is fully preserved.
+# 模式 C 區塊的結束錨點（模式 C 之後的下一個章節標題）
+_V77_C_END_ANCHORS = ('固定收益及保底收益之付款方式', '押金', '分潤結算規則')
+
+# 各欄位抽取失敗時填入的空白底線
+_V2_BLANKS = {
+    'address':                '　　　　　　　　　　',
+    'spots':                  '____',
+    'amount':                 '________',
+    'party_a_percent':        '__',
+    'party_b_percent':        '__',
+    'min_guarantee':          '________',
+    'excess_threshold':       '________',
+    'excess_party_a_percent': '__',
+    'excess_party_b_percent': '__',
+    'start_date':             '____年__月__日',
+    'end_date':               '____年__月__日',
+}
+
+
+def is_v77_owner_contract(plain_text: str) -> bool:
+    """7.7 業主版公版特徵：內文有「模式 A／B／C：」標題。舊格式合約沒有。"""
+    return bool(_V77_MODE_TITLE.search(plain_text))
+
+
+def _find_mode_blocks(plain: str) -> dict:
+    """Split plain text into per-mode blocks: {'a': (start, end, checked), ...}"""
+    titles = []
+    seen = set()
+    for m in _V77_MODE_TITLE.finditer(plain):
+        letter = {'Ａ': 'A', 'Ｂ': 'B', 'Ｃ': 'C'}.get(m.group(1), m.group(1)).lower()
+        if letter not in seen:
+            seen.add(letter)
+            titles.append((m.start(), letter))
+    titles.sort()
+
+    blocks = {}
+    for i, (pos, letter) in enumerate(titles):
+        if i + 1 < len(titles):
+            end = titles[i + 1][0]
+        else:
+            # 最後一個模式區塊：找下一個章節錨點
+            end = len(plain)
+            for anchor in _V77_C_END_ANCHORS:
+                a = plain.find(anchor, pos)
+                if a != -1:
+                    end = min(end, a)
+            end = min(end, pos + 800)
+        # 勾選判斷：標題前 4 個字元內有 ■/☑ 即為勾選
+        prefix = plain[max(0, pos - 4):pos]
+        checked = '■' in prefix or '☑' in prefix
+        blocks[letter] = (pos, end, checked)
+    return blocks
+
+
+def extract_v77_data(plain: str) -> tuple:
+    """Extract contract data from a 7.7 業主版 contract.
+
+    Anchors on stable legal phrasing (新台幣…元整、超額門檻、甲方分得…%)
+    so that light custom edits by sales don't break extraction.
+    Returns (data dict, warnings list of Chinese field labels).
     """
-    # Inject values copied from old contract
-    for label, field_key in _HEADER_FIELD_MAP:
-        if field_key not in fields:
-            continue
-        value = xml_escape(fields[field_key])
-        header_xml = re.sub(
-            r'(<w:t[^>]*>)(' + re.escape(label) + r')(</w:t>)',
-            lambda m, v=value: m.group(1) + m.group(2) + v + m.group(3),
-            header_xml,
-            count=1,
-        )
+    data = {}
+    warnings = []
 
-    # 所得代號 is always 一般法人(00發票) in 合作協議書 (甲方 is always a legal entity)
-    header_xml = re.sub(
-        r'(<w:t[^>]*>)(所得代號[：:])(</w:t>)',
-        lambda m: m.group(1) + m.group(2) + xml_escape(_INCOME_CODE_HEADER) + m.group(3),
-        header_xml,
-        count=1,
-    )
+    m = re.search(r'坐落於\s*(.+?)\s*，\s*共計\s*([0-9０-９]+)\s*格', plain)
+    if m:
+        data['address'] = m.group(1).strip()
+        data['spots'] = m.group(2)
+    else:
+        warnings.append('停車場地址／車位數')
 
-    # Update 稅前/稅後 from old contract (template defaults to 分潤稅前)
-    if fields.get('tax_suffix') == '後':
-        header_xml = re.sub(
-            r'(<w:t[^>]*>)((?:分潤|租賃)稅)前(</w:t>)',
-            lambda m: m.group(1) + m.group(2) + '後' + m.group(3),
-            header_xml,
-            count=1,
-        )
+    m = re.search(
+        r'自民國（下同）\s*(.+?)\s*（下稱「生效日」）\s*起至\s*(.+?)\s*（下稱「到期日」）', plain)
+    if not m:
+        # 容錯：句型被改過時，直接找「N年N月N日…起至…N年N月N日」
+        m = re.search(
+            r'自(?:民國)?[^。]{0,15}?([0-9０-９]{2,4}\s*年\s*[0-9０-９]{1,2}\s*月\s*[0-9０-９]{1,2}\s*日)'
+            r'[^。]{0,25}?起\s*至\s*[^。]{0,15}?'
+            r'([0-9０-９]{2,4}\s*年\s*[0-9０-９]{1,2}\s*月\s*[0-9０-９]{1,2}\s*日)', plain)
+    if m:
+        data['start_date'] = m.group(1).strip()
+        data['end_date'] = m.group(2).strip()
+    else:
+        warnings.append('合作期間起訖日期')
 
-    return header_xml
+    blocks = _find_mode_blocks(plain)
+    checked = [k for k, v in blocks.items() if v[2]]
+    if len(checked) == 1:
+        mode = checked[0]
+    elif len(blocks) == 1:
+        # 業務刪掉沒用到的模式，只留一個 → 就是它
+        mode = next(iter(blocks))
+    elif len(checked) > 1:
+        mode = checked[0]
+        warnings.append('收益模式（勾選了多個模式，請確認）')
+    else:
+        mode = None
+        warnings.append('收益模式（A／B／C 無法判斷）')
+    data['mode'] = mode
+
+    if mode:
+        bs, be, _ = blocks[mode]
+        block = plain[bs:be]
+
+        if mode == 'a':
+            m = re.search(r'新台幣\s*([\d,，0-9０-９]+)\s*元整', block)
+            if m:
+                data['amount'] = m.group(1)
+            else:
+                warnings.append('模式A固定收益金額')
+
+        elif mode == 'b':
+            m = re.search(r'甲方分得\s*([\d.０-９]+)\s*[%％]', block)
+            m2 = re.search(r'乙方分得\s*([\d.０-９]+)\s*[%％]', block)
+            if m and m2:
+                data['party_a_percent'] = m.group(1)
+                data['party_b_percent'] = m2.group(1)
+            else:
+                warnings.append('模式B分潤比例')
+
+        elif mode == 'c':
+            m = re.search(r'新台幣\s*([\d,，0-9０-９]+)\s*元整', block)
+            if m:
+                data['min_guarantee'] = m.group(1)
+            else:
+                warnings.append('模式C保底金額')
+            m = re.search(r'超過新台幣\s*([\d,，0-9０-９]+)\s*元', block)
+            if m:
+                data['excess_threshold'] = m.group(1)
+            else:
+                warnings.append('模式C超額門檻')
+            m = re.search(r'甲方分得\s*([\d.０-９]+)\s*[%％]', block)
+            m2 = re.search(r'乙方分得\s*([\d.０-９]+)\s*[%％]', block)
+            if m and m2:
+                data['excess_party_a_percent'] = m.group(1)
+                data['excess_party_b_percent'] = m2.group(1)
+            else:
+                warnings.append('模式C超額分潤比例')
+
+        # 含稅／未稅：從勾選模式的區塊內抓「停車營收（…）」
+        m = re.search(r'停車營收\s*（\s*(含稅|未稅)\s*）', block)
+        data['tax_type'] = m.group(1) if m else '未稅'
+    else:
+        data['tax_type'] = '未稅'
+
+    return data, warnings
+
+
+def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
+                 plain: str) -> tuple:
+    """Render the 悠勢版 7.7 V2 template from data extracted out of a 7.7 業主版 contract."""
+    from docxtpl import DocxTemplate
+    from generator import _post_process_docx, _override_fonts
+
+    if not os.path.exists(V2_USPACE_TEMPLATE):
+        raise ValueError('找不到悠勢版 7.7 V2 範本檔案')
+
+    co = COMPANIES[company_name]
+    data, warnings = extract_v77_data(plain)
+    header_fields = _extract_header_fields(docx_bytes)
+
+    mode = data.get('mode')
+    tax = data.get('tax_type', '未稅')
+
+    ctx = {
+        # 甲方＝第三方公司，資料全部查表帶入
+        'party_a':         co['name'],
+        'owner':           co['person'],
+        'id_number':       co['id'],
+        'contact_address': co['address'],
+        'email':           co['contact'],
+        'bank_name':       co['bank'],
+        'account_name':    co['account_name'],
+        'account_number':  co['account_no'],
+        # 乙方悠勢固定寫死在範本內
+        'sign_date':   '',
+        'income_code': _INCOME_CODE_HEADER,
+        'tax_type':    tax,
+        # 內文模式勾選
+        'mode_a_check': '■' if mode == 'a' else '□',
+        'mode_b_check': '■' if mode == 'b' else '□',
+        'mode_c_check': '■' if mode == 'c' else '□',
+        # header 勾選
+        'fixed_check':      '■' if mode in ('a', 'c') else '□',
+        'profit_inc_check': '■' if (mode in ('b', 'c') and tax == '含稅') else '□',
+        'profit_exc_check': '■' if (mode in ('b', 'c') and tax == '未稅') else '□',
+        # header 欄位（從業主版 header 抄過來）
+        'sales':          header_fields.get('sales', ''),
+        'building_id':    header_fields.get('building_id', ''),
+        'building_name':  header_fields.get('building_name', ''),
+        'building_phone': header_fields.get('building_phone', ''),
+    }
+    for key in ('address', 'spots', 'start_date', 'end_date', 'amount',
+                'party_a_percent', 'party_b_percent', 'min_guarantee',
+                'excess_threshold', 'excess_party_a_percent', 'excess_party_b_percent'):
+        ctx[key] = data.get(key, '')
+
+    for field, blank in _V2_BLANKS.items():
+        if not str(ctx.get(field, '')).strip():
+            ctx[field] = blank
+
+    tpl = DocxTemplate(V2_USPACE_TEMPLATE)
+    tpl.render(ctx)
+    buf = io.BytesIO()
+    tpl.save(buf)
+    output_bytes = _post_process_docx(buf.getvalue(), '')
+    output_bytes = _override_fonts(output_bytes)
+
+    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
+    output_filename = f'{base}(對悠勢合約).docx'
+
+    return output_bytes, output_filename, warnings
 
 
 def validate_xml(xml_str: str) -> None:
@@ -1153,12 +1031,67 @@ def validate_xml(xml_str: str) -> None:
         raise ValueError(f'合約 XML 格式有誤，無法轉換此檔案（{e}）')
 
 
+def _convert_party_swap(docx_bytes: bytes, original_filename: str,
+                        company_name: str) -> tuple:
+    """非公版合約（增補合約等）：內容完全不動，只替換甲乙方。
+    甲方 → 偵測到的第三方公司，乙方 → 悠勢科技。
+    同時填入甲方銀行帳戶、所得代號固定法人 00發票。"""
+    with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+        xml = z.read('word/document.xml').decode('utf-8')
+        try:
+            styles_xml = z.read('word/styles.xml').decode('utf-8')
+        except KeyError:
+            styles_xml = ''
+
+    company = COMPANIES[company_name]
+    income_code = '00發票'
+
+    font = detect_main_font(xml + styles_xml)
+    xml = update_header_parties(xml, company_name, font=font)
+    xml = fill_bank_account(xml, company)
+    xml = replace_signature_section(xml, company, font=font)
+    xml = _fix_income_code_for_uspace(xml)
+
+    validate_xml(xml)
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(docx_bytes), 'r') as zin, \
+         zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == 'word/document.xml':
+                data = _strip_highlights(xml).encode('utf-8')
+            elif item.filename == 'word/styles.xml':
+                data = _strip_highlights(data.decode('utf-8')).encode('utf-8')
+            elif item.filename.startswith('word/header'):
+                hdr = data.decode('utf-8')
+                hdr = update_header_income_code(hdr, income_code)
+                data = hdr.encode('utf-8')
+            zout.writestr(item, data)
+
+    output_bytes = output.getvalue()
+
+    # Append bank account image page if available for this company
+    img_filename = BANK_IMAGES.get(company_name)
+    if img_filename:
+        img_path = os.path.join(PIC_DIR, img_filename)
+        if os.path.exists(img_path):
+            with open(img_path, 'rb') as f:
+                img_data = f.read()
+            output_bytes = _append_bank_image(output_bytes, img_data, img_filename)
+
+    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
+    output_filename = f'{base}(對悠勢合約).docx'
+
+    return output_bytes, output_filename, []
+
+
 def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str = '') -> tuple:
     """
-    Convert a 對業主 contract to the new 合作協議書 format.
-    Detects company and contract type from input, loads corresponding new template,
-    fills in address/spots/dates/fee data extracted from the old contract.
-    Returns (output_bytes, output_filename).
+    Convert a 對業主 contract to the 對悠勢 format.
+    - 7.7 業主版公版（內文有模式 A/B/C）→ docxtpl 渲染悠勢版 7.7 V2 公版
+    - 非公版（增補合約等）→ 原文不動，只替換甲乙方
+    Returns (output_bytes, output_filename, warnings).
     Raises ValueError for user-facing errors.
     """
     with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
@@ -1173,43 +1106,7 @@ def convert_contract(docx_bytes: bytes, original_filename: str, income_code: str
         print(f'[converter] detect_company failed. plain[:300]={plain[:300]!r}', file=sys.stderr)
         raise ValueError('無法識別合約中的公司（志昌／瀚昱／毅源），請確認上傳的是對業主合約')
 
-    data = extract_old_data(plain)
+    if is_v77_owner_contract(plain):
+        return _convert_v77(docx_bytes, original_filename, company_name, plain)
 
-    template_filename = NEW_TEMPLATE_FILES.get(company_name)
-    if not template_filename:
-        raise ValueError(f'找不到 {company_name} 的新合約範本')
-
-    template_path = os.path.join(NEW_TEMPLATES_DIR, template_filename)
-    if not os.path.exists(template_path):
-        raise ValueError(f'新合約範本檔案不存在：{template_filename}')
-
-    with open(template_path, 'rb') as f:
-        template_bytes = f.read()
-
-    with zipfile.ZipFile(io.BytesIO(template_bytes)) as z:
-        template_xml = z.read('word/document.xml').decode('utf-8')
-
-    filled_xml = fill_new_template(template_xml, data)
-
-    validate_xml(filled_xml)
-
-    header_fields = _extract_header_fields(docx_bytes)
-
-    output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(template_bytes), 'r') as zin, \
-         zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
-        for item in zin.infolist():
-            item_data = zin.read(item.filename)
-            if item.filename == 'word/document.xml':
-                item_data = filled_xml.encode('utf-8')
-            elif re.match(r'word/header\d+\.xml', item.filename) and header_fields:
-                hxml = _fill_template_header(item_data.decode('utf-8'), header_fields)
-                item_data = hxml.encode('utf-8')
-            zout.writestr(item, item_data)
-
-    output_bytes = output.getvalue()
-
-    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
-    output_filename = f'{base}(合作協議書).docx'
-
-    return output_bytes, output_filename
+    return _convert_party_swap(docx_bytes, original_filename, company_name)

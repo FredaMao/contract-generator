@@ -49,17 +49,20 @@ async def convert(background_tasks: BackgroundTasks, file: UploadFile = File(...
         raise HTTPException(status_code=400, detail="請上傳 .docx 格式的檔案")
     content = await file.read()
     try:
-        output_bytes, output_filename = convert_contract(content, file.filename)
+        output_bytes, output_filename, warnings = convert_contract(content, file.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"轉換失敗：{str(e)}")
     background_tasks.add_task(_log_to_sheet, [_now(), '轉換器', '', '', '', file.filename])
     encoded_name = quote(output_filename, safe='')
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"}
+    if warnings:
+        headers["X-Convert-Warnings"] = quote(json.dumps(warnings, ensure_ascii=False), safe='')
     return StreamingResponse(
         io.BytesIO(output_bytes),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+        headers=headers,
     )
 
 

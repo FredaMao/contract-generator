@@ -156,6 +156,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 .status.loading { background: #eef4ff; color: #3b6fd4; }
 .status.success { background: #e8f8f0; color: #1a7a46; }
 .status.error   { background: #fdf0f0; color: #c0392b; }
+.status.warning { background: #fff8e6; color: #9a6b00; }
 .spinner {
     display: inline-block; width: 12px; height: 12px;
     border: 2px solid #3b6fd4; border-top-color: transparent;
@@ -600,7 +601,19 @@ async function doConvert() {
             var m = disp.match(/filename\*=UTF-8''(.+)/i);
             if (m) name = decodeURIComponent(m[1]);
             downloadBlob(blob, name);
-            showStatus('convert-status', '✓ 轉換完成！已下載：' + name, 'success');
+            var warnItems = [];
+            var warnHdr = res.headers.get('X-Convert-Warnings');
+            if (warnHdr) {
+                try { warnItems = JSON.parse(decodeURIComponent(warnHdr)); } catch (e) {}
+            }
+            if (warnItems.length) {
+                showStatus('convert-status',
+                    '✓ 轉換完成！已下載：' + name +
+                    '<br>⚠️ 以下欄位無法從原合約辨識，已留空，請手動填入：<br>・' +
+                    warnItems.join('<br>・'), 'warning');
+            } else {
+                showStatus('convert-status', '✓ 轉換完成！已下載：' + name, 'success');
+            }
         }
     } catch (e) {
         showStatus('convert-status', '✗ 網路錯誤：' + e.message, 'error');
