@@ -933,6 +933,51 @@ def _fill_mode_b_pct(xml: str, paras: list, party_a_pct: str, party_b_pct: str) 
     return _rebuild_para_text(xml, ps, pe, new_text)
 
 
+_PARTY_SFX_PAT = re.compile(r'[（(][^）)]{0,30}[甲乙][　\s]*方[^）)]{0,10}[）)]')
+
+
+def _fix_preamble_party_lines(xml: str) -> str:
+    """Strip underline from party name paragraphs and align （下稱甲方）/（下稱乙方）."""
+    paragraphs = list_paragraphs(xml)
+    jia_info = yi_info = None
+
+    for ps, pe, text in paragraphs[:60]:
+        m = _PARTY_SFX_PAT.search(text)
+        if not m:
+            continue
+        sfx_text = text[m.start():]
+        prefix = text[:m.start()].rstrip('　 ')
+        if '甲方' in sfx_text and jia_info is None:
+            jia_info = (ps, pe, prefix, sfx_text)
+        elif '乙方' in sfx_text and yi_info is None:
+            yi_info = (ps, pe, prefix, sfx_text)
+
+    if not jia_info or not yi_info:
+        return xml
+
+    jia_ps, jia_pe, jia_pre, jia_sfx = jia_info
+    yi_ps,  yi_pe,  yi_pre,  yi_sfx  = yi_info
+    max_len = max(len(jia_pre), len(yi_pre))
+
+    items = [
+        (jia_ps, jia_pe, jia_pre, '　' * (max_len - len(jia_pre)), jia_sfx),
+        (yi_ps,  yi_pe,  yi_pre,  '　' * (max_len - len(yi_pre)),  yi_sfx),
+    ]
+    for ps, pe, pre, padding, sfx in sorted(items, key=lambda x: x[0], reverse=True):
+        para_xml = _strip_revision_tracking(xml[ps:pe])
+        ppr = get_ppr(para_xml)
+        rpr = _get_para_rpr(para_xml)
+        rpr = re.sub(r'<w:u\b[^/]*/>', '', rpr)   # remove underline
+        new_text = pre + padding + sfx
+        new_para = (f'<w:p>{ppr}'
+                    f'<w:r>{rpr}'
+                    f'<w:t xml:space="preserve">{xml_escape(new_text)}</w:t>'
+                    f'</w:r></w:p>')
+        xml = xml[:ps] + new_para + xml[pe:]
+
+    return xml
+
+
 _PERIOD_MAP = {
     '月':   ('月結制', '一（1）個月'),
     '半年': ('半年繳制', '六（6）個月'),
@@ -995,6 +1040,8 @@ def fill_new_template(template_xml: str, data: dict) -> str:
         paras = list_paragraphs(xml)
         if 'party_a_pct' in data and 'party_b_pct' in data:
             xml = _fill_mode_b_pct(xml, paras, data['party_a_pct'], data['party_b_pct'])
+
+    xml = _fix_preamble_party_lines(xml)
 
     return xml
 
