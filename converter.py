@@ -918,6 +918,15 @@ def extract_v77_data(plain: str) -> tuple:
                 data['amount'] = m.group(1)
             else:
                 warnings.append('模式A固定收益金額')
+            # 付款頻率／期間：悠勢版範本預設月結，若業主版不是月結必須同步改
+            m = re.search(
+                r'採\s*([^，。＿_]{1,6}?)\s*制{1,2}\s*，\s*即以每'
+                r'\s*([0-9０-９一二三四五六七八九十（）()]{1,8}?)\s*個月為一期', block)
+            if m:
+                data['pay_freq'] = m.group(1)
+                data['pay_months'] = m.group(2)
+            else:
+                warnings.append('模式A付款頻率／期間（輸出為預設月結，請確認）')
 
         elif mode == 'b':
             m = re.search(r'甲方分得\s*([\d.０-９]+)\s*[%％]', block)
@@ -953,7 +962,50 @@ def extract_v77_data(plain: str) -> tuple:
     else:
         data['tax_type'] = '未稅'
 
+    # 簽約日期：文末「中華民國X年X月X日」（取最後一個有數字的）
+    sign_date = None
+    for m in re.finditer(
+            r'中[　\s]*華[　\s]*民[　\s]*國[　\s]*'
+            r'([0-9０-９]{2,3}\s*年\s*[0-9０-９]{1,2}\s*月\s*[0-9０-９]{1,2}\s*日)', plain):
+        sign_date = m.group(1)
+    if sign_date:
+        data['sign_date'] = re.sub(r'\s+', '', sign_date)
+
+    # 客製偵測：展延條款（公版是「不限次數」，被改過就警告）
+    m = re.search(r'順延一年\s*[，,]?\s*([^。，,]{1,12})\s*。', plain)
+    if m and m.group(1).strip() != '不限次數':
+        warnings.append(f'展延條款疑似經客製修改（業主版為「{m.group(1).strip()}」，'
+                        f'輸出為公版「不限次數」，請人工確認）')
+
     return data, warnings
+
+
+_MODE_A_DEFAULT_PERIOD = '採月結制，即以每一（1）個月為一期'
+
+
+def _fix_mode_a_period(docx_bytes: bytes, freq: str, months: str) -> bytes:
+    """悠勢版範本模式 A 寫死月結；業主版若非月結，把頻率／期間同步過去。"""
+    from generator import _rebuild_para_text
+
+    in_buf = io.BytesIO(docx_bytes)
+    out_buf = io.BytesIO()
+    with zipfile.ZipFile(in_buf) as zin, \
+         zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == 'word/document.xml':
+                xml = data.decode('utf-8')
+                for ps, pe, text in list_paragraphs(xml):
+                    # 模式 A 段落（模式 B 開頭也是「採月結制」，用固定收益句限定）
+                    if _MODE_A_DEFAULT_PERIOD in text and '雙方約定每期固定' in text:
+                        new_text = text.replace(
+                            _MODE_A_DEFAULT_PERIOD,
+                            f'採{freq}制，即以每{months}個月為一期')
+                        xml = _rebuild_para_text(xml, ps, pe, new_text)
+                        break
+                data = xml.encode('utf-8')
+            zout.writestr(item, data)
+    return out_buf.getvalue()
 
 
 def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
@@ -1013,7 +1065,16 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     tpl.render(ctx)
     buf = io.BytesIO()
     tpl.save(buf)
-    output_bytes = _post_process_docx(buf.getvalue(), '')
+    output_bytes = buf.getvalue()
+
+    # 模式 A 非月結 → 把付款頻率／期間同步到悠勢版
+    freq = data.get('pay_freq', '')
+    months = data.get('pay_months', '')
+    if (mode == 'a' and freq and months
+            and not (months in ('1', '１', '一', '一（1）') and '月' in freq)):
+        output_bytes = _fix_mode_a_period(output_bytes, freq, months)
+
+    output_bytes = _post_process_docx(output_bytes, data.get('sign_date', ''))
     output_bytes = _override_fonts(output_bytes)
 
     base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
