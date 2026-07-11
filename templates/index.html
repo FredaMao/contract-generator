@@ -234,9 +234,10 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
             <button class="sel-btn" data-group="company" data-val="悠勢" onclick="pickSel(this)">悠勢</button>
         </div>
         <div class="selector-row">
-            <span class="selector-label">合約類型</span>
-            <button class="sel-btn active" data-group="ctype" data-val="rent" onclick="pickSel(this)">租賃型</button>
-            <button class="sel-btn" data-group="ctype" data-val="profit" onclick="pickSel(this)">分潤型</button>
+            <span class="selector-label">收益框架</span>
+            <button class="sel-btn active" data-group="mode" data-val="a" onclick="pickSel(this)">模式A　固定收益</button>
+            <button class="sel-btn" data-group="mode" data-val="b" onclick="pickSel(this)">模式B　分潤</button>
+            <button class="sel-btn" data-group="mode" data-val="c" onclick="pickSel(this)">模式C　保底＋超額</button>
         </div>
 
         <hr class="gen-divider">
@@ -307,16 +308,14 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
         <div class="section-label">合約條件</div>
         <div class="form-grid">
 
-            <!-- 租賃型 -->
-            <div class="f rent-only">
-                <label>租金 <span class="req">*</span></label>
+            <!-- 模式A：固定金額 -->
+            <div class="f mode-a-only">
+                <label>固定金額（元） <span class="req">*</span></label>
                 <input type="text" name="amount" placeholder="例：50,000">
             </div>
-            <div class="f rent-only">
-                <label>最低保障收益</label>
-                <input type="text" name="low_rev" placeholder="例：500">
-            </div>
-            <div class="f rent-only">
+
+            <!-- 模式A + 悠勢：付款頻率 / 期間 -->
+            <div class="f uspace-mode-a hidden">
                 <label>付款頻率 <span class="req">*</span></label>
                 <select name="pay_freq" onchange="onPayFreqChange(this)">
                     <option value="">請選擇</option>
@@ -326,15 +325,51 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                     <option value="年繳">年繳</option>
                 </select>
             </div>
-            <div class="f rent-only">
+            <div class="f uspace-mode-a hidden">
                 <label>付款期間（月數，自動填入）</label>
                 <input type="text" name="pay_period" id="pay-period" readonly placeholder="依付款頻率自動填入">
             </div>
-            <div class="f rent-only">
-                <label>付款日</label>
-                <input type="number" name="pay_day" placeholder="例：5" min="1" max="31">
+
+            <!-- 模式B/C：稅別 -->
+            <div class="f mode-bc-only hidden">
+                <label>稅別 <span class="req">*</span></label>
+                <select name="tax_type">
+                    <option value="">請選擇</option>
+                    <option value="含稅">含稅</option>
+                    <option value="未稅">未稅</option>
+                </select>
             </div>
-            <div class="f rent-only">
+
+            <!-- 模式B/C：分潤比例 -->
+            <div class="f mode-bc-only hidden">
+                <label>甲方分潤比例（%） <span class="req">*</span></label>
+                <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcPartyB(this)">
+            </div>
+            <div class="f mode-bc-only hidden">
+                <label>乙方分潤比例（%）</label>
+                <input type="text" name="party_b_percent" id="b-percent" placeholder="自動計算" readonly>
+            </div>
+
+            <!-- 模式C：保底與超額 -->
+            <div class="f mode-c-only hidden">
+                <label>最低保障收益（元） <span class="req">*</span></label>
+                <input type="text" name="min_guarantee" placeholder="例：30,000">
+            </div>
+            <div class="f mode-c-only hidden">
+                <label>超額門檻（元，未稅） <span class="req">*</span></label>
+                <input type="text" name="excess_threshold" placeholder="例：80,000">
+            </div>
+            <div class="f mode-c-only hidden">
+                <label>超額甲方比例（%） <span class="req">*</span></label>
+                <input type="text" name="excess_party_a_percent" placeholder="例：50" oninput="calcExcessB(this)">
+            </div>
+            <div class="f mode-c-only hidden">
+                <label>超額乙方比例（%）</label>
+                <input type="text" name="excess_party_b_percent" id="excess-b-percent" placeholder="自動計算" readonly>
+            </div>
+
+            <!-- 模式A/C + 悠勢：付款方式 -->
+            <div class="f uspace-mode-ac hidden">
                 <label>付款方式 <span class="req">*</span></label>
                 <select name="pay_method">
                     <option value="">請選擇</option>
@@ -343,25 +378,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 </select>
             </div>
 
-            <!-- 分潤型 -->
-            <div class="f profit-only hidden">
-                <label>甲方分潤比例（%） <span class="req">*</span></label>
-                <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcPartyB(this)">
-            </div>
-            <div class="f profit-only hidden">
-                <label>乙方分潤比例（%） <span class="req">*</span></label>
-                <input type="text" name="party_b_percent" id="b-percent" placeholder="例：30">
-            </div>
-
-            <!-- 共用 -->
-            <div class="f">
-                <label>稅務 <span class="req">*</span></label>
-                <select name="tax_type">
-                    <option value="">請選擇</option>
-                    <option value="稅前">稅前</option>
-                    <option value="稅後">稅後</option>
-                </select>
-            </div>
+            <!-- 所得代號（共用） -->
             <div class="f span2">
                 <label>所得代號 <span class="req">*</span></label>
                 <div class="ic-group" id="ic-group">
@@ -438,7 +455,7 @@ function switchTab(name, btn) {
 }
 
 // ── Selector pills ──
-var selected = { company: '志昌', ctype: 'rent' };
+var selected = { company: '志昌', mode: 'a' };
 
 function pickSel(btn) {
     var group = btn.dataset.group;
@@ -449,11 +466,21 @@ function pickSel(btn) {
 }
 
 function updateFields() {
-    var isRent = selected.ctype === 'rent';
+    var mode = selected.mode;
     var isUspace = selected.company === '悠勢';
-    document.querySelectorAll('.rent-only').forEach(function(el) { el.classList.toggle('hidden', !isRent); });
-    document.querySelectorAll('.profit-only').forEach(function(el) { el.classList.toggle('hidden', isRent); });
+
+    // Mode-specific visibility
+    document.querySelectorAll('.mode-a-only').forEach(function(el) { el.classList.toggle('hidden', mode !== 'a'); });
+    document.querySelectorAll('.mode-b-only').forEach(function(el) { el.classList.toggle('hidden', mode !== 'b'); });
+    document.querySelectorAll('.mode-c-only').forEach(function(el) { el.classList.toggle('hidden', mode !== 'c'); });
+    document.querySelectorAll('.mode-bc-only').forEach(function(el) { el.classList.toggle('hidden', mode !== 'b' && mode !== 'c'); });
+    document.querySelectorAll('.mode-ac-only').forEach(function(el) { el.classList.toggle('hidden', mode !== 'a' && mode !== 'c'); });
+
+    // Combined: company + mode
+    document.querySelectorAll('.uspace-mode-a').forEach(function(el) { el.classList.toggle('hidden', !isUspace || mode !== 'a'); });
+    document.querySelectorAll('.uspace-mode-ac').forEach(function(el) { el.classList.toggle('hidden', !isUspace || (mode !== 'a' && mode !== 'c')); });
     document.querySelectorAll('.uspace-only').forEach(function(el) { el.classList.toggle('hidden', !isUspace); });
+
     clearErrors();
 }
 
@@ -472,19 +499,19 @@ function clearErrors() {
 function validateForm() {
     clearErrors();
     var errors = [];
-    var isRent = selected.ctype === 'rent';
+    var mode = selected.mode;
+    var isUspace = selected.company === '悠勢';
 
     function chk(name, label) {
         var el = document.querySelector('#tab-generate [name="' + name + '"]');
-        if (!el || !el.value.trim()) {
-            if (el) el.classList.add('field-error');
-            errors.push(label);
+        if (!el || el.closest('.hidden') || !el.value.trim()) {
+            if (el && !el.closest('.hidden')) el.classList.add('field-error');
+            if (!el || !el.closest('.hidden')) errors.push(label);
         }
     }
 
-    chk('address',         '停車場地址');
-    chk('sales',           '業務人員');
-    chk('tax_type',        '稅務');
+    chk('address', '停車場地址');
+    chk('sales',   '業務人員');
 
     var icChecked = document.querySelector('#tab-generate input[name="income_code"]:checked');
     if (!icChecked) {
@@ -493,13 +520,24 @@ function validateForm() {
         errors.push('所得代號');
     }
 
-    if (isRent) {
-        chk('amount',     '租金');
-        chk('pay_freq',   '付款頻率');
-        chk('pay_method', '付款方式');
-    } else {
+    if (mode === 'a') {
+        chk('amount', '固定金額');
+        if (isUspace) {
+            chk('pay_freq',   '付款頻率');
+            chk('pay_method', '付款方式');
+        }
+    } else if (mode === 'b') {
+        chk('tax_type',        '稅別');
         chk('party_a_percent', '甲方分潤比例');
-        chk('party_b_percent', '乙方分潤比例');
+    } else if (mode === 'c') {
+        chk('tax_type',              '稅別');
+        chk('min_guarantee',         '最低保障收益');
+        chk('excess_threshold',      '超額門檻');
+        chk('excess_party_a_percent','超額甲方比例');
+        chk('party_a_percent',       '甲方分潤比例');
+        if (isUspace) {
+            chk('pay_method', '付款方式');
+        }
     }
 
     return errors;
@@ -509,7 +547,14 @@ function validateForm() {
 function calcPartyB(input) {
     var a = parseFloat(input.value);
     var el = document.getElementById('b-percent');
-    el.value = (!isNaN(a) && a >= 0 && a <= 100) ? (100 - a).toString() : '';
+    el.value = (!isNaN(a) && a >= 0 && a <= 100) ? (100 - a).toFixed(0) : '';
+}
+
+// Auto-calc 超額乙方% = 100 - 超額甲方%
+function calcExcessB(input) {
+    var a = parseFloat(input.value);
+    var el = document.getElementById('excess-b-percent');
+    el.value = (!isNaN(a) && a >= 0 && a <= 100) ? (100 - a).toFixed(0) : '';
 }
 
 // ── Convert tab ──
@@ -588,7 +633,7 @@ async function doGenerate() {
 
     var fd = new FormData();
     fd.append('company', selected.company);
-    fd.append('contract_type', selected.ctype);
+    fd.append('mode', selected.mode);
     // track which radio groups have been handled
     var radiosDone = {};
     document.querySelectorAll('#tab-generate input[name], #tab-generate select[name]').forEach(function(el) {

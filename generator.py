@@ -8,6 +8,13 @@ from converter import xml_escape, list_paragraphs
 
 FONT = '標楷體'
 
+NEW_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本', 'NEW')
+
+TEMPLATES = {
+    '悠勢':  '悠勢-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
+    'third': '第三方-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
+}
+
 COMPANIES = {
     '志昌': {
         'name': '志昌資產管理股份有限公司',
@@ -35,25 +42,27 @@ COMPANIES = {
     },
 }
 
-COMPANY_TEMPLATES = {'rent': 'template_rent.docx', 'profit': 'template_profit.docx'}
-USPACE_TEMPLATES = {'rent': 'template_rent_uspace.docx', 'profit': 'template_profit_uspace.docx'}
-
 _OPTIONAL_BLANKS = {
-    'spots':          '____',
-    'pay_period':     '__',
-    'pay_day':        '__',
-    'low_rev':        '____________',
-    'bank_name':      '____________________',
-    'account_name':   '____________________',
-    'account_number': '____________________',
-    'phone':          '______________',
-    'email':          '____________________',
-    'start_date':     '____年__月__日',
-    'end_date':       '____年__月__日',
-    'sign_date':      '____年__月__日',
+    'spots':                  '____',
+    'amount':                 '________',
+    'pay_freq':               '____',
+    'pay_period':             '__',
+    'pay_method':             '______',
+    'min_guarantee':          '________',
+    'excess_threshold':       '________',
+    'excess_party_a_percent': '__',
+    'excess_party_b_percent': '__',
+    'party_a_percent':        '__',
+    'party_b_percent':        '__',
+    'bank_name':              '____________________',
+    'account_name':           '____________________',
+    'account_number':         '____________________',
+    'phone':                  '______________',
+    'email':                  '____________________',
+    'start_date':             '____年__月__日',
+    'end_date':               '____年__月__日',
+    'sign_date':              '____年__月__日',
 }
-
-TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
 
 
 def date_to_minguo(date_str: str) -> str:
@@ -248,10 +257,14 @@ def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
     return out_buf.getvalue()
 
 
-def generate_contract(company_key: str, contract_type: str, form_data: dict) -> tuple[bytes, str]:
+def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[bytes, str]:
     building_name = form_data.get('building_name', '').strip()
     if not building_name:
         raise ValueError('建物名稱為必填欄位')
+
+    mode = mode.lower()
+    if mode not in ('a', 'b', 'c'):
+        raise ValueError(f'未知的收益框架模式：{mode}')
 
     ctx = dict(form_data)
 
@@ -260,52 +273,63 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
 
     ctx['email'] = ctx.get('a_email', '')
 
-    contract_prefix = '分潤' if contract_type == 'profit' else '租賃'
-    tax_str = form_data.get('tax_type', '')
-    ctx['contract_tax_label'] = f"{contract_prefix}{tax_str}/手續費內含"
-    ctx['building_id'] = form_data.get('building_id', '').strip()
-    ctx['building_name'] = building_name
+    # Building / header data fields
+    ctx['building_id']    = form_data.get('building_id', '').strip()
+    ctx['building_name']  = building_name
     ctx['building_phone'] = form_data.get('building_phone', '').strip()
-    # income_code value encodes category + code, e.g. "個人_空地租賃(51L)"
+    ctx['sales']          = form_data.get('sales', '').strip()
+
+    # Income code — stored as "類別_代號" e.g. "個人_空地租賃(51L)"
     ic_full = form_data.get('income_code', '').strip()
     ic_display = ic_full.split('_', 1)[1] if '_' in ic_full else ic_full
-    ctx['income_code'] = ic_display
-    ctx['ic_personal_51L']   = (ic_full == '個人_空地租賃(51L)')
-    ctx['ic_personal_51J']   = (ic_full == '個人_建物租賃(51J)')
-    ctx['ic_corp_00']        = (ic_full == '法人_00發票')
-    ctx['ic_committee_51L']  = (ic_full == '管委會_空地租賃(51L)')
-    ctx['ic_committee_51J']  = (ic_full == '管委會_建物租賃(51J)')
-    ctx['ic_committee_00']   = (ic_full == '管委會_00發票')
-    ctx['sales'] = form_data.get('sales', '').strip()
+    ctx['income_code']       = ic_display
+    ctx['ic_personal_51L']  = (ic_full == '個人_空地租賃(51L)')
+    ctx['ic_personal_51J']  = (ic_full == '個人_建物租賃(51J)')
+    ctx['ic_corp_00']       = (ic_full == '法人_00發票')
+    ctx['ic_committee_51L'] = (ic_full == '管委會_空地租賃(51L)')
+    ctx['ic_committee_51J'] = (ic_full == '管委會_建物租賃(51J)')
+    ctx['ic_committee_00']  = (ic_full == '管委會_00發票')
 
+    # Mode selection checkboxes (body)
+    ctx['mode_a_check'] = '☑' if mode == 'a' else '☐'
+    ctx['mode_b_check'] = '☑' if mode == 'b' else '☐'
+    ctx['mode_c_check'] = '☑' if mode == 'c' else '☐'
+
+    # Header checkboxes — computed from mode + tax_type
+    tax = form_data.get('tax_type', '')
+    ctx['fixed_check']      = '☑' if mode in ('a', 'c') else '☐'
+    ctx['profit_inc_check'] = '☑' if mode in ('b', 'c') and tax == '含稅' else '☐'
+    ctx['profit_exc_check'] = '☑' if mode in ('b', 'c') and tax == '未稅' else '☐'
+
+    # Mode C fields
+    ctx['min_guarantee']          = form_data.get('min_guarantee', '').strip()
+    ctx['excess_threshold']       = form_data.get('excess_threshold', '').strip()
+    ctx['excess_party_a_percent'] = form_data.get('excess_party_a_percent', '').strip()
+    ctx['excess_party_b_percent'] = form_data.get('excess_party_b_percent', '').strip()
+
+    # Template selection and company context
     if company_key == '悠勢':
-        tpl_file = USPACE_TEMPLATES.get(contract_type)
-        if not tpl_file:
-            raise ValueError(f'未知的合約類型：{contract_type}')
-        ctx['email'] = ctx.get('a_email', '')
+        tpl_file = TEMPLATES['悠勢']
         company_label = '悠勢科技'
     else:
         co = COMPANIES.get(company_key)
         if not co:
             raise ValueError(f'未知的公司：{company_key}')
-        tpl_file = COMPANY_TEMPLATES.get(contract_type)
-        if not tpl_file:
-            raise ValueError(f'未知的合約類型：{contract_type}')
-        ctx['party_b'] = co['name']
-        ctx['b_owner'] = co['owner']
-        ctx['b_id'] = co['id']
-        ctx['b_phone'] = co['phone']
+        tpl_file = TEMPLATES['third']
+        ctx['party_b']   = co['name']
+        ctx['b_owner']   = co['owner']
+        ctx['b_id']      = co['id']
         ctx['b_address'] = co['address']
-        ctx['b_email'] = co['email']
+        ctx['b_email']   = co['email']
         company_label = co['name']
 
-    sign_date_raw = ctx.get('sign_date', '')  # preserve for _apply_date_format
+    sign_date_raw = ctx.get('sign_date', '')
 
     for field, blank in _OPTIONAL_BLANKS.items():
-        if not ctx.get(field, '').strip():
+        if not str(ctx.get(field, '')).strip():
             ctx[field] = blank
 
-    tpl = DocxTemplate(os.path.join(TEMPLATE_DIR, tpl_file))
+    tpl = DocxTemplate(os.path.join(NEW_DIR, tpl_file))
     tpl.render(ctx)
 
     buf = io.BytesIO()
@@ -313,9 +337,9 @@ def generate_contract(company_key: str, contract_type: str, form_data: dict) -> 
     docx_bytes = _post_process_docx(buf.getvalue(), sign_date_raw)
     docx_bytes = _override_fonts(docx_bytes)
 
-    contract_title = '停車位租賃契約書' if contract_type == 'rent' else '停車位服務契約書'
+    mode_label = {'a': '模式A', 'b': '模式B', 'c': '模式C'}[mode]
     building_id = ctx['building_id']
     party_a = form_data.get('party_a', '').strip()
-    filename = f"{building_id}{building_name}-{party_a}-{contract_title}.docx"
+    filename = f"{building_id}{building_name}-{party_a}-停車場合作協議書-{mode_label}.docx"
 
     return docx_bytes, filename

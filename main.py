@@ -67,7 +67,7 @@ async def convert(background_tasks: BackgroundTasks, file: UploadFile = File(...
 async def generate(
     background_tasks: BackgroundTasks,
     company: str = Form(...),
-    contract_type: str = Form(...),
+    mode: str = Form(...),
     building_id: str = Form(''),
     building_name: str = Form(''),
     building_phone: str = Form(''),
@@ -88,13 +88,15 @@ async def generate(
     end_date: str = Form(''),
     sign_date: str = Form(''),
     amount: str = Form(''),
-    low_rev: str = Form(''),
     pay_freq: str = Form(''),
     pay_period: str = Form(''),
-    pay_day: str = Form(''),
     pay_method: str = Form(''),
     party_a_percent: str = Form(''),
     party_b_percent: str = Form(''),
+    min_guarantee: str = Form(''),
+    excess_threshold: str = Form(''),
+    excess_party_a_percent: str = Form(''),
+    excess_party_b_percent: str = Form(''),
     sales: str = Form(''),
 ):
     form_data = {
@@ -105,21 +107,23 @@ async def generate(
         'address': address, 'spots': spots, 'tax_type': tax_type,
         'bank_name': bank_name, 'account_name': account_name, 'account_number': account_number,
         'start_date': start_date, 'end_date': end_date, 'sign_date': sign_date,
-        'amount': amount, 'low_rev': low_rev,
-        'pay_freq': pay_freq, 'pay_period': pay_period,
-        'pay_day': pay_day, 'pay_method': pay_method,
+        'amount': amount, 'pay_freq': pay_freq, 'pay_period': pay_period,
+        'pay_method': pay_method,
         'party_a_percent': party_a_percent, 'party_b_percent': party_b_percent,
+        'min_guarantee': min_guarantee, 'excess_threshold': excess_threshold,
+        'excess_party_a_percent': excess_party_a_percent,
+        'excess_party_b_percent': excess_party_b_percent,
         'sales': sales,
     }
     try:
-        output_bytes, filename = generate_contract(company, contract_type, form_data)
+        output_bytes, filename = generate_contract(company, mode, form_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"產生失敗：{str(e)}")
-    type_label = '分潤' if contract_type == 'profit' else '租賃'
+    mode_label = {'a': '模式A', 'b': '模式B', 'c': '模式C'}.get(mode.lower(), mode)
     background_tasks.add_task(_log_to_sheet, [
-        _now(), '產生器', company, type_label, party_a, building_name, sales,
+        _now(), '產生器', company, mode_label, party_a, building_name, sales,
     ])
     encoded_name = quote(filename, safe='')
     return StreamingResponse(
