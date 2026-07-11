@@ -121,6 +121,7 @@ def _rebuild_para_text(xml: str, ps: int, pe: int, new_text: str, size: int = 0)
     if rpr_m:
         rpr_content = re.sub(r'<w:sz\b[^/]*/>', '', rpr_m.group(1))
         rpr_content = re.sub(r'<w:szCs\b[^/]*/>', '', rpr_content)
+        rpr_content = re.sub(r'<w:u\b[^/]*/>', '', rpr_content)
         if size:
             rpr_content += f'<w:sz w:val="{size * 2}"/><w:szCs w:val="{size * 2}"/>'
         rpr = f'<w:rPr>{rpr_content}</w:rPr>'
@@ -174,11 +175,7 @@ def _align_party_suffixes(xml: str) -> str:
         (yi_ps,  yi_pe,  yi_pre,  '　' * (max_len - len(yi_pre)),  yi_sfx),
     ]
     for ps, pe, pre, padding, sfx in sorted(items, key=lambda x: x[0], reverse=True):
-        para_xml = xml[ps:pe]
-        if '<w:sdt>' in para_xml or '<w:sdt ' in para_xml:
-            xml = _inject_padding_into_para_sdt(xml, ps, pe, padding, sfx)
-        else:
-            xml = _rebuild_para_text(xml, ps, pe, pre + padding + sfx)
+        xml = _rebuild_para_text(xml, ps, pe, pre + padding + sfx)
     return xml
 
 
