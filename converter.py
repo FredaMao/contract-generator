@@ -803,7 +803,7 @@ _INCOME_CODE_HEADER = '一般法人(00發票)'
 
 V2_USPACE_TEMPLATE = os.path.join(
     NEW_TEMPLATES_DIR, 'NEW',
-    '第三方-悠勢_停車場系統管理與技術服務合作協議書_公版_7.7_V2.docx',
+    '第三方-悠勢_停車場系統管理與技術服務合作協議書_公版_7.16.docx',
 )
 
 _V77_MODE_TITLE = re.compile(r'模式\s*([ABCＡＢＣ])\s*[：:]')
@@ -816,6 +816,8 @@ _V2_BLANKS = {
     'address':                '　　　　　　　　　　',
     'spots':                  '____',
     'amount':                 '________',
+    'pay_freq':               '月結',
+    'pay_period':             '一（1）',
     'party_a_percent':        '__',
     'party_b_percent':        '__',
     'min_guarantee':          '________',
@@ -980,34 +982,6 @@ def extract_v77_data(plain: str) -> tuple:
     return data, warnings
 
 
-_MODE_A_DEFAULT_PERIOD = '採月結制，即以每一（1）個月為一期'
-
-
-def _fix_mode_a_period(docx_bytes: bytes, freq: str, months: str) -> bytes:
-    """悠勢版範本模式 A 寫死月結；業主版若非月結，把頻率／期間同步過去。"""
-    from generator import _rebuild_para_text
-
-    in_buf = io.BytesIO(docx_bytes)
-    out_buf = io.BytesIO()
-    with zipfile.ZipFile(in_buf) as zin, \
-         zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
-        for item in zin.infolist():
-            data = zin.read(item.filename)
-            if item.filename == 'word/document.xml':
-                xml = data.decode('utf-8')
-                for ps, pe, text in list_paragraphs(xml):
-                    # 模式 A 段落（模式 B 開頭也是「採月結制」，用固定收益句限定）
-                    if _MODE_A_DEFAULT_PERIOD in text and '雙方約定每期固定' in text:
-                        new_text = text.replace(
-                            _MODE_A_DEFAULT_PERIOD,
-                            f'採{freq}制，即以每{months}個月為一期')
-                        xml = _rebuild_para_text(xml, ps, pe, new_text)
-                        break
-                data = xml.encode('utf-8')
-            zout.writestr(item, data)
-    return out_buf.getvalue()
-
-
 def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
                  plain: str) -> tuple:
     """Render the 悠勢版 7.7 V2 template from data extracted out of a 7.7 業主版 contract."""
@@ -1035,18 +1009,16 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
         'account_name':    co['account_name'],
         'account_number':  co['account_no'],
         # 乙方悠勢固定寫死在範本內
-        'sign_date':   '',
+        'sign_date':   data.get('sign_date', ''),
         'income_code': _INCOME_CODE_HEADER,
-        'tax_type':    tax,
         # 內文模式勾選
         'mode_a_check': '■' if mode == 'a' else '□',
         'mode_b_check': '■' if mode == 'b' else '□',
         'mode_c_check': '■' if mode == 'c' else '□',
-        # header 勾選
-        'fixed_check':      '■' if mode in ('a', 'c') else '□',
-        'profit_inc_check': '■' if (mode in ('b', 'c') and tax == '含稅') else '□',
-        'profit_exc_check': '■' if (mode in ('b', 'c') and tax == '未稅') else '□',
-        # header 欄位（從業主版 header 抄過來）
+        # 模式 A 付款頻率／期間（從業主版帶入，預設月結）
+        'pay_freq':   data.get('pay_freq', ''),
+        'pay_period': data.get('pay_months', ''),
+        # header 欄位（從業主版 header 抄過來；7.16 header 稅別為固定文字，無勾選變數）
         'sales':          header_fields.get('sales', ''),
         'building_id':    header_fields.get('building_id', ''),
         'building_name':  header_fields.get('building_name', ''),
@@ -1057,6 +1029,9 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
                 'excess_threshold', 'excess_party_a_percent', 'excess_party_b_percent'):
         ctx[key] = data.get(key, '')
 
+    # 7.16 新增履約保證金條款，業主合約無此資料，一律提醒人工填寫
+    warnings.append('履約保證金（金額、繳交／退還工作日）為 7.16 新增條款，請人工填寫')
+
     for field, blank in _V2_BLANKS.items():
         if not str(ctx.get(field, '')).strip():
             ctx[field] = blank
@@ -1065,16 +1040,7 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     tpl.render(ctx)
     buf = io.BytesIO()
     tpl.save(buf)
-    output_bytes = buf.getvalue()
-
-    # 模式 A 非月結 → 把付款頻率／期間同步到悠勢版
-    freq = data.get('pay_freq', '')
-    months = data.get('pay_months', '')
-    if (mode == 'a' and freq and months
-            and not (months in ('1', '１', '一', '一（1）') and '月' in freq)):
-        output_bytes = _fix_mode_a_period(output_bytes, freq, months)
-
-    output_bytes = _post_process_docx(output_bytes, data.get('sign_date', ''))
+    output_bytes = _post_process_docx(buf.getvalue(), data.get('sign_date', ''))
     output_bytes = _override_fonts(output_bytes)
 
     base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename

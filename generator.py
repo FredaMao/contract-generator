@@ -11,8 +11,10 @@ FONT = '標楷體'
 NEW_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本', 'NEW')
 
 TEMPLATES = {
-    '悠勢':  '悠勢-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
-    'third': '第三方-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
+    '悠勢': '悠勢-業主_停車場系統管理與技術服務合作協議書_公版_7.14.docx',
+    '志昌': '志昌-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
+    '瀚昱': '瀚昱-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
+    '毅源': '毅源-業主_停車場系統管理與技術服務合作協議書_公版_7.7.docx',
 }
 
 COMPANIES = {
@@ -45,8 +47,8 @@ COMPANIES = {
 _OPTIONAL_BLANKS = {
     'spots':                  '____',
     'amount':                 '________',
-    'pay_freq':               '____',
-    'pay_period':             '__',
+    'pay_freq':               '月結',
+    'pay_period':             '一（1）',
     'pay_method':             '匯款',
     'min_guarantee':          '________',
     'excess_threshold':       '________',
@@ -299,6 +301,11 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     ctx['mode_b_check'] = '■' if mode == 'b' else '□'
     ctx['mode_c_check'] = '■' if mode == 'c' else '□'
 
+    # 竣工圖／繪製圖 checkboxes（悠勢-業主 7.14 範本專用）
+    blueprint = form_data.get('blueprint', '').strip()
+    ctx['bp_owner_check']  = '■' if blueprint == 'owner' else '□'
+    ctx['bp_uspace_check'] = '■' if blueprint == 'uspace' else '□'
+
     # Tax type is always 未稅 for profit-sharing
     ctx['tax_type'] = '未稅'
 
@@ -313,21 +320,10 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     ctx['excess_party_a_percent'] = form_data.get('excess_party_a_percent', '').strip()
     ctx['excess_party_b_percent'] = form_data.get('excess_party_b_percent', '').strip()
 
-    # Template selection and company context
-    if company_key == '悠勢':
-        tpl_file = TEMPLATES['悠勢']
-        company_label = '悠勢科技'
-    else:
-        co = COMPANIES.get(company_key)
-        if not co:
-            raise ValueError(f'未知的公司：{company_key}')
-        tpl_file = TEMPLATES['third']
-        ctx['party_b']   = co['name']
-        ctx['b_owner']   = co['owner']
-        ctx['b_id']      = co['id']
-        ctx['b_address'] = co['address']
-        ctx['b_email']   = co['email']
-        company_label = co['name']
+    # Template selection（乙方資訊已寫死在各公司範本內，不再需要 party_b 變數）
+    tpl_file = TEMPLATES.get(company_key)
+    if not tpl_file:
+        raise ValueError(f'未知的公司：{company_key}')
 
     sign_date_raw = ctx.get('sign_date', '')
 
