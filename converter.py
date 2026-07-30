@@ -803,7 +803,7 @@ _INCOME_CODE_HEADER = '一般法人(00發票)'
 
 V2_USPACE_TEMPLATE = os.path.join(
     NEW_TEMPLATES_DIR, 'NEW',
-    '第三方-悠勢_停車場系統管理與技術服務合作協議書_公版_7.16.docx',
+    '第三方-悠勢_停車場系統管理與技術服務合作協議書_公版_7.17.docx',
 )
 
 _V77_MODE_TITLE = re.compile(r'模式\s*([ABCＡＢＣ])\s*[：:]')
@@ -996,7 +996,6 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     header_fields = _extract_header_fields(docx_bytes)
 
     mode = data.get('mode')
-    tax = data.get('tax_type', '未稅')
 
     ctx = {
         # 甲方＝第三方公司，資料全部查表帶入
@@ -1015,10 +1014,14 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
         'mode_a_check': '■' if mode == 'a' else '□',
         'mode_b_check': '■' if mode == 'b' else '□',
         'mode_c_check': '■' if mode == 'c' else '□',
+        # header 稅別勾選（與 generator.py 邏輯一致：分潤一律未稅）
+        'fixed_check':      '■' if mode in ('a', 'c') else '□',
+        'profit_inc_check': '□',
+        'profit_exc_check': '■' if mode in ('b', 'c') else '□',
         # 模式 A 付款頻率／期間（從業主版帶入，預設月結）
         'pay_freq':   data.get('pay_freq', ''),
         'pay_period': data.get('pay_months', ''),
-        # header 欄位（從業主版 header 抄過來；7.16 header 稅別為固定文字，無勾選變數）
+        # header 欄位（從業主版 header 抄過來）
         'sales':          header_fields.get('sales', ''),
         'building_id':    header_fields.get('building_id', ''),
         'building_name':  header_fields.get('building_name', ''),
@@ -1029,8 +1032,8 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
                 'excess_threshold', 'excess_party_a_percent', 'excess_party_b_percent'):
         ctx[key] = data.get(key, '')
 
-    # 7.16 新增履約保證金條款，業主合約無此資料，一律提醒人工填寫
-    warnings.append('履約保證金（金額、繳交／退還工作日）為 7.16 新增條款，請人工填寫')
+    # 履約保證金為悠勢版新增條款，業主合約無金額資料，一律提醒人工填寫（繳交/退還工作日已預設7日）
+    warnings.append('履約保證金金額為悠勢版新增條款，業主合約無對應資料，請人工填寫')
 
     for field, blank in _V2_BLANKS.items():
         if not str(ctx.get(field, '')).strip():
