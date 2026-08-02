@@ -199,6 +199,52 @@ def _apply_date_format(xml: str, sign_date: str = '') -> str:
     return xml
 
 
+_SIG_TITLE_PAT = re.compile(r'立(協議|契約|合約|租賃契約)書人')
+
+
+def _keep_signature_with_date(xml: str) -> str:
+    """Glue the signature block to the date line with w:keepNext so Word
+    never splits the date onto its own page away from the party info
+    (the owner-side templates leave ~12 blank lines for a physical stamp,
+    which otherwise pushes the date line past the page boundary)."""
+    paragraphs = list_paragraphs(xml)
+    n = len(paragraphs)
+
+    sig_idx = None
+    for i in range(n - 1, -1, -1):
+        if _SIG_TITLE_PAT.search(paragraphs[i][2]):
+            sig_idx = i
+            break
+    if sig_idx is None:
+        return xml
+
+    date_idx = None
+    for i in range(n - 1, sig_idx, -1):
+        text = paragraphs[i][2]
+        if _DATE_PAT.search(text) and '法規' not in text and '法律' not in text:
+            date_idx = i
+            break
+    if date_idx is None:
+        return xml
+
+    # Chain keepNext across every paragraph from the signature title through
+    # the one right before the date line, forming a single unbreakable block.
+    for ps, pe, _ in reversed(paragraphs[sig_idx:date_idx]):
+        para_xml = xml[ps:pe]
+        if '<w:keepNext' in para_xml:
+            continue
+        ppr_m = re.search(r'<w:pPr\b[^>]*>', para_xml)
+        if ppr_m:
+            new_para = para_xml[:ppr_m.end()] + '<w:keepNext/>' + para_xml[ppr_m.end():]
+        else:
+            p_m = re.search(r'<w:p\b[^>]*>', para_xml)
+            new_para = (para_xml[:p_m.end()] + '<w:pPr><w:keepNext/></w:pPr>'
+                        + para_xml[p_m.end():])
+        xml = xml[:ps] + new_para + xml[pe:]
+
+    return xml
+
+
 def _fix_paragraph_ids(xml: str) -> str:
     """Assign unique w14:paraId and w14:textId values to avoid Word 'unreadable content' warning.
 
@@ -254,6 +300,7 @@ def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
                     doc_xml = _fix_paragraph_ids(doc_xml)
                     doc_xml = _align_party_suffixes(doc_xml)
                     doc_xml = _apply_date_format(doc_xml, sign_date)
+                    doc_xml = _keep_signature_with_date(doc_xml)
                     data = doc_xml.encode('utf-8')
                 elif item.filename.startswith('word/') and item.filename.endswith('.xml'):
                     xml_str = data.decode('utf-8')
