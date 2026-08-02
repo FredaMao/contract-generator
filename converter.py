@@ -999,6 +999,25 @@ def extract_v77_data(plain: str) -> tuple:
     return data, warnings
 
 
+def _rename_for_uspace_output(original_filename: str, company_name: str) -> str:
+    """Rebuild the output filename with the third-party company name swapped
+    in for the 業主 party segment (the party changes from 業主 to the
+    third-party once converted), keeping the building id/name and mode
+    label, then appending (對悠勢合約).
+
+    Falls back to just appending the suffix onto the original filename when
+    it doesn't follow the generator's naming convention
+    (`{building}{name}-{party}-停車場合作協議書-{mode}.docx`).
+    """
+    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
+    co_name = COMPANIES[company_name]['name']
+    m = re.match(r'^([^-]+)-([^-]+)-停車場合作協議書-(.+)$', base)
+    if m:
+        building_prefix, _owner, rest = m.groups()
+        base = f'{building_prefix}-{co_name}-停車場合作協議書-{rest}'
+    return f'{base}(對悠勢合約).docx'
+
+
 def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
                  plain: str) -> tuple:
     """Render the 悠勢版 7.7 V2 template from data extracted out of a 7.7 業主版 contract."""
@@ -1065,8 +1084,7 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     output_bytes = _post_process_docx(buf.getvalue(), data.get('sign_date', ''))
     output_bytes = _override_fonts(output_bytes)
 
-    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
-    output_filename = f'{base}(對悠勢合約).docx'
+    output_filename = _rename_for_uspace_output(original_filename, company_name)
 
     return output_bytes, output_filename, warnings
 
@@ -1129,8 +1147,7 @@ def _convert_party_swap(docx_bytes: bytes, original_filename: str,
                 img_data = f.read()
             output_bytes = _append_bank_image(output_bytes, img_data, img_filename)
 
-    base = original_filename[:-5] if original_filename.lower().endswith('.docx') else original_filename
-    output_filename = f'{base}(對悠勢合約).docx'
+    output_filename = _rename_for_uspace_output(original_filename, company_name)
 
     return output_bytes, output_filename, []
 
