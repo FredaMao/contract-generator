@@ -388,7 +388,7 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     docx_bytes = _post_process_docx(buf.getvalue(), sign_date_raw)
     docx_bytes = _override_fonts(docx_bytes)
 
-    mode_label = {'a': '模式A', 'b': '模式B', 'c': '模式C'}[mode]
+    mode_label = {'a': '(租賃)', 'b': '(分潤)', 'c': '(固定超額分潤)'}[mode]
     building_id = ctx['building_id']
     party_a = form_data.get('party_a', '').strip()
     filename = f"{building_id}{building_name}-{party_a}-停車場合作協議書-{mode_label}.docx"
