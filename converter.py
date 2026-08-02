@@ -11,7 +11,7 @@ COMPANIES = {
         'person': '連偉策',
         'id': '90634048',
         'contact_label': '電子郵件',
-        'contact': 'sevice@zcasset.com.tw',
+        'contact': 'service@zcasset.com.tw',
         'address': '臺北市中山區長安東路2段80號10樓之1',
         'bank': '國泰世華銀行 慶城分行',
         'account_name': '志昌資產管理股份有限公司',
@@ -56,7 +56,7 @@ SIG_FIELDS = {
         '甲方名稱：志昌資產管理股份有限公司',
         '負責人：連偉策',
         '統一編號：90634048',
-        '電子信箱：sevice@zcasset.com.tw',
+        '電子信箱：service@zcasset.com.tw',
         '聯絡地址：臺北市中山區長安東路2段80號10樓之1',
     ],
     '瀚昱開發股份有限公司': [

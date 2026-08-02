@@ -24,7 +24,7 @@ COMPANIES = {
         'id': '90634048',
         'phone': '',
         'address': '臺北市中山區長安東路2段80號10樓之1',
-        'email': 'sevice@zcasset.com.tw',
+        'email': 'service@zcasset.com.tw',
     },
     '瀚昱': {
         'name': '瀚昱開發股份有限公司',
