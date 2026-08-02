@@ -816,6 +816,7 @@ _V2_BLANKS = {
     'address':                '　　　　　　　　　　',
     'spots':                  '____',
     'amount':                 '________',
+    'deposit':                '_______________',
     'pay_freq':               '月結',
     'pay_period':             '一（1）',
     'party_a_percent':        '__',
@@ -894,6 +895,13 @@ def extract_v77_data(plain: str) -> tuple:
         data['end_date'] = m.group(2).strip()
     else:
         warnings.append('合作期間起訖日期')
+
+    # 押金：業主版第2條第3項，非模式專屬（悠勢版對應「履約保證金」金額）
+    m = re.search(r'支付押金\s*([\d,，0-9０-９]+)\s*元', plain)
+    if m:
+        data['deposit'] = m.group(1)
+    else:
+        warnings.append('押金金額（悠勢版履約保證金金額請人工確認）')
 
     blocks = _find_mode_blocks(plain)
     checked = [k for k, v in blocks.items() if v[2]]
@@ -1033,6 +1041,8 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
         # 模式 A／C 付款頻率／期間（從業主版帶入，預設月結）
         'pay_freq':   data.get('pay_freq', ''),
         'pay_period': data.get('pay_months', ''),
+        # 履約保證金金額＝業主版押金金額（同一筆保證金換個名稱，非新增資料）
+        'deposit': data.get('deposit', ''),
         # header 欄位（從業主版 header 抄過來）
         'sales':          header_fields.get('sales', ''),
         'building_id':    header_fields.get('building_id', ''),
@@ -1043,9 +1053,6 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
                 'party_a_percent', 'party_b_percent', 'min_guarantee',
                 'excess_threshold', 'excess_party_a_percent', 'excess_party_b_percent'):
         ctx[key] = data.get(key, '')
-
-    # 履約保證金為悠勢版新增條款，業主合約無金額資料，一律提醒人工填寫（繳交/退還工作日已預設7日）
-    warnings.append('履約保證金金額為悠勢版新增條款，業主合約無對應資料，請人工填寫')
 
     for field, blank in _V2_BLANKS.items():
         if not str(ctx.get(field, '')).strip():
