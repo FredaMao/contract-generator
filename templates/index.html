@@ -371,12 +371,12 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="excess_party_b_percent" id="excess-b-percent" placeholder="自動計算" readonly>
             </div>
 
-            <!-- 模式B/C：分潤比例（暫留待確認模式C是否仍需要） -->
-            <div class="f mode-bc-only hidden">
+            <!-- 模式B：分潤比例 -->
+            <div class="f mode-b-only hidden">
                 <label>甲方分潤比例（%） <span class="req">*</span></label>
                 <input type="text" name="party_a_percent" placeholder="例：70" oninput="calcPartyB(this)">
             </div>
-            <div class="f mode-bc-only hidden">
+            <div class="f mode-b-only hidden">
                 <label>乙方分潤比例（%）</label>
                 <input type="text" name="party_b_percent" id="b-percent" placeholder="自動計算" readonly>
             </div>
@@ -548,7 +548,6 @@ function validateForm() {
         chk('excess_threshold',      '超額門檻');
         chk('tax_type',              '分潤稅別');
         chk('excess_party_a_percent','超額甲方比例');
-        chk('party_a_percent',       '甲方分潤比例');
         if (isUspace) {
             chk('pay_method', '付款方式');
         }
