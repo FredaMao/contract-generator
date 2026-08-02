@@ -945,6 +945,15 @@ def extract_v77_data(plain: str) -> tuple:
                 data['min_guarantee'] = m.group(1)
             else:
                 warnings.append('模式C保底金額')
+            # 付款頻率／期間：與模式A共用同一組欄位（A/C 互斥，不會同時提交）
+            m = re.search(
+                r'採\s*([^，。＿_]{1,6}?)\s*制{1,2}\s*，\s*即以每'
+                r'\s*([0-9０-９一二三四五六七八九十（）()]{1,8}?)\s*個月為一期', block)
+            if m:
+                data['pay_freq'] = m.group(1)
+                data['pay_months'] = m.group(2)
+            else:
+                warnings.append('模式C付款頻率／期間（輸出為預設月結，請確認）')
             m = re.search(r'超過新台幣\s*([\d,，0-9０-９]+)\s*元', block)
             if m:
                 data['excess_threshold'] = m.group(1)
@@ -1021,7 +1030,7 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
         'fixed_check':      '■' if mode in ('a', 'c') else '□',
         'profit_inc_check': '■' if (mode in ('b', 'c') and tax_type == '含稅') else '□',
         'profit_exc_check': '■' if (mode in ('b', 'c') and tax_type == '未稅') else '□',
-        # 模式 A 付款頻率／期間（從業主版帶入，預設月結）
+        # 模式 A／C 付款頻率／期間（從業主版帶入，預設月結）
         'pay_freq':   data.get('pay_freq', ''),
         'pay_period': data.get('pay_months', ''),
         # header 欄位（從業主版 header 抄過來）

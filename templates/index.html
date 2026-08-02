@@ -322,18 +322,19 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="amount" placeholder="例：50,000">
             </div>
 
-            <!-- 模式A：付款頻率 / 期間 -->
-            <div class="f mode-a-only">
+            <!-- 模式A/C：付款頻率 / 期間 -->
+            <div class="f mode-ac-only">
                 <label>付款頻率 <span class="req">*</span></label>
                 <select name="pay_freq" onchange="onPayFreqChange(this)">
                     <option value="">請選擇</option>
                     <option value="月結">月結</option>
+                    <option value="雙月結">雙月結</option>
                     <option value="季結">季結</option>
                     <option value="半年結">半年結</option>
                     <option value="年結">年結</option>
                 </select>
             </div>
-            <div class="f mode-a-only">
+            <div class="f mode-ac-only">
                 <label>付款期間（月數，自動填入）</label>
                 <input type="text" name="pay_period" id="pay-period" readonly placeholder="依付款頻率自動填入">
             </div>
@@ -493,7 +494,7 @@ function updateFields() {
 }
 
 // Auto-fill pay_period from pay_freq
-var freqPeriodMap = { '月結': '1', '季結': '3', '半年結': '6', '年結': '12' };
+var freqPeriodMap = { '月結': '1', '雙月結': '2', '季結': '3', '半年結': '6', '年結': '12' };
 function onPayFreqChange(sel) {
     var el = document.getElementById('pay-period');
     el.value = freqPeriodMap[sel.value] || '';
@@ -540,6 +541,7 @@ function validateForm() {
     } else if (mode === 'c') {
         chk('tax_type',              '分潤稅別');
         chk('min_guarantee',         '最低保障收益');
+        chk('pay_freq',              '付款頻率');
         chk('excess_threshold',      '超額門檻');
         chk('excess_party_a_percent','超額甲方比例');
         chk('party_a_percent',       '甲方分潤比例');
