@@ -391,6 +391,12 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 </select>
             </div>
 
+            <!-- 押金（共用，若無則填0） -->
+            <div class="f">
+                <label>押金（元，若無填0） <span class="req">*</span></label>
+                <input type="text" name="deposit" placeholder="例：0">
+            </div>
+
             <!-- 所得代號（共用） -->
             <div class="f span2">
                 <label>所得代號 <span class="req">*</span></label>
@@ -525,6 +531,7 @@ function validateForm() {
 
     chk('address', '停車場地址');
     chk('sales',   '業務人員');
+    chk('deposit', '押金');
 
     var icChecked = document.querySelector('#tab-generate input[name="income_code"]:checked');
     if (!icChecked) {

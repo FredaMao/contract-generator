@@ -47,6 +47,7 @@ COMPANIES = {
 _OPTIONAL_BLANKS = {
     'spots':                  '____',
     'amount':                 '________',
+    'deposit':                '0',
     'pay_freq':               '月結',
     'pay_period':             '一（1）',
     'pay_method':             '匯款',
