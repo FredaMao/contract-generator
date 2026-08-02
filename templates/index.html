@@ -318,7 +318,7 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
             <!-- 模式A：固定金額 -->
             <div class="f mode-a-only">
-                <label>固定金額（元） <span class="req">*</span></label>
+                <label>固定金額（元，含稅） <span class="req">*</span></label>
                 <input type="text" name="amount" placeholder="例：50,000">
             </div>
 
@@ -338,6 +338,16 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="pay_period" id="pay-period" readonly placeholder="依付款頻率自動填入">
             </div>
 
+            <!-- 模式B/C：分潤稅別 -->
+            <div class="f mode-bc-only hidden">
+                <label>分潤稅別 <span class="req">*</span></label>
+                <select name="tax_type">
+                    <option value="">請選擇</option>
+                    <option value="未稅">未稅</option>
+                    <option value="含稅">含稅</option>
+                </select>
+            </div>
+
             <!-- 模式B/C：分潤比例 -->
             <div class="f mode-bc-only hidden">
                 <label>甲方分潤比例（%） <span class="req">*</span></label>
@@ -350,11 +360,11 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
 
             <!-- 模式C：保底與超額 -->
             <div class="f mode-c-only hidden">
-                <label>最低保障收益（元） <span class="req">*</span></label>
+                <label>最低保障收益（元，含稅） <span class="req">*</span></label>
                 <input type="text" name="min_guarantee" placeholder="例：30,000">
             </div>
             <div class="f mode-c-only hidden">
-                <label>超額門檻（元，未稅） <span class="req">*</span></label>
+                <label>超額門檻（元） <span class="req">*</span></label>
                 <input type="text" name="excess_threshold" placeholder="例：80,000">
             </div>
             <div class="f mode-c-only hidden">
@@ -525,8 +535,10 @@ function validateForm() {
             chk('pay_method', '付款方式');
         }
     } else if (mode === 'b') {
+        chk('tax_type',        '分潤稅別');
         chk('party_a_percent', '甲方分潤比例');
     } else if (mode === 'c') {
+        chk('tax_type',              '分潤稅別');
         chk('min_guarantee',         '最低保障收益');
         chk('excess_threshold',      '超額門檻');
         chk('excess_party_a_percent','超額甲方比例');

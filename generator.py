@@ -306,13 +306,14 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     ctx['bp_owner_check']  = '■' if blueprint == 'owner' else '□'
     ctx['bp_uspace_check'] = '■' if blueprint == 'uspace' else '□'
 
-    # Tax type is always 未稅 for profit-sharing
-    ctx['tax_type'] = '未稅'
+    # 分潤稅別（模式B、模式C超額部分適用；固定金額/保底金額恆為含稅，不受此影響）
+    tax_type = form_data.get('tax_type', '').strip() or '未稅'
+    ctx['tax_type'] = tax_type
 
-    # Header checkboxes — 固定 for mode A/C; 分潤未稅 for mode B/C
+    # Header checkboxes — 固定 for mode A/C; 分潤依所選稅別 for mode B/C
     ctx['fixed_check']      = '■' if mode in ('a', 'c') else '□'
-    ctx['profit_inc_check'] = '□'
-    ctx['profit_exc_check'] = '■' if mode in ('b', 'c') else '□'
+    ctx['profit_inc_check'] = '■' if (mode in ('b', 'c') and tax_type == '含稅') else '□'
+    ctx['profit_exc_check'] = '■' if (mode in ('b', 'c') and tax_type == '未稅') else '□'
 
     # Mode C fields
     ctx['min_guarantee']          = form_data.get('min_guarantee', '').strip()

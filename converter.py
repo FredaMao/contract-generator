@@ -996,6 +996,7 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     header_fields = _extract_header_fields(docx_bytes)
 
     mode = data.get('mode')
+    tax_type = data.get('tax_type', '未稅')
 
     ctx = {
         # 甲方＝第三方公司，資料全部查表帶入
@@ -1014,10 +1015,12 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
         'mode_a_check': '■' if mode == 'a' else '□',
         'mode_b_check': '■' if mode == 'b' else '□',
         'mode_c_check': '■' if mode == 'c' else '□',
-        # header 稅別勾選（與 generator.py 邏輯一致：分潤一律未稅）
+        # 分潤稅別（從業主版抽取，模式B/C超額適用；固定/保底金額恆為含稅不受影響）
+        'tax_type': tax_type,
+        # header 稅別勾選（與 generator.py 邏輯一致）
         'fixed_check':      '■' if mode in ('a', 'c') else '□',
-        'profit_inc_check': '□',
-        'profit_exc_check': '■' if mode in ('b', 'c') else '□',
+        'profit_inc_check': '■' if (mode in ('b', 'c') and tax_type == '含稅') else '□',
+        'profit_exc_check': '■' if (mode in ('b', 'c') and tax_type == '未稅') else '□',
         # 模式 A 付款頻率／期間（從業主版帶入，預設月結）
         'pay_freq':   data.get('pay_freq', ''),
         'pay_period': data.get('pay_months', ''),
