@@ -728,19 +728,13 @@ def _fix_income_code_for_uspace(xml: str) -> str:
 
 
 def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) -> bytes:
-    """Append a new page with the bank account image using python-docx."""
+    """Append the bank account image right after the existing content.
+    No forced page break — it flows onto the current page if there's room,
+    or wraps to a new page naturally otherwise."""
     from docx import Document
     from docx.shared import Inches
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
 
     doc = Document(io.BytesIO(docx_bytes))
-
-    para = doc.add_paragraph()
-    run = para.add_run()
-    br = OxmlElement('w:br')
-    br.set(qn('w:type'), 'page')
-    run._r.append(br)
 
     para = doc.add_paragraph()
     run = para.add_run()
