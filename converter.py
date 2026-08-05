@@ -88,6 +88,7 @@ PIC_DIR = os.path.join(os.path.dirname(__file__), 'pic')
 NEW_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), '自動產生合約範本')
 
 BANK_IMAGES = {
+    '志昌資產管理股份有限公司': '志昌-國泰慶城.jpg',
     '瀚昱開發股份有限公司': '瀚昱-凱基城東.jpg',
     '毅源開發股份有限公司': '毅源-凱基城東.jpg',
 }
@@ -750,6 +751,20 @@ def _append_bank_image(docx_bytes: bytes, img_data: bytes, img_filename: str) ->
     return buf.getvalue()
 
 
+def _append_company_bank_image(docx_bytes: bytes, company_name: str) -> bytes:
+    """Append the third-party company's bank passbook image as a new last
+    page, if one exists for that company. No-op otherwise."""
+    img_filename = BANK_IMAGES.get(company_name)
+    if not img_filename:
+        return docx_bytes
+    img_path = os.path.join(PIC_DIR, img_filename)
+    if not os.path.exists(img_path):
+        return docx_bytes
+    with open(img_path, 'rb') as f:
+        img_data = f.read()
+    return _append_bank_image(docx_bytes, img_data, img_filename)
+
+
 def _parse_header_plain(plain: str, fields: dict) -> None:
     """Extract header field values from plain text.
 
@@ -1083,6 +1098,7 @@ def _convert_v77(docx_bytes: bytes, original_filename: str, company_name: str,
     tpl.save(buf)
     output_bytes = _post_process_docx(buf.getvalue(), data.get('sign_date', ''))
     output_bytes = _override_fonts(output_bytes)
+    output_bytes = _append_company_bank_image(output_bytes, company_name)
 
     output_filename = _rename_for_uspace_output(original_filename, company_name)
 
@@ -1137,15 +1153,7 @@ def _convert_party_swap(docx_bytes: bytes, original_filename: str,
             zout.writestr(item, data)
 
     output_bytes = output.getvalue()
-
-    # Append bank account image page if available for this company
-    img_filename = BANK_IMAGES.get(company_name)
-    if img_filename:
-        img_path = os.path.join(PIC_DIR, img_filename)
-        if os.path.exists(img_path):
-            with open(img_path, 'rb') as f:
-                img_data = f.read()
-            output_bytes = _append_bank_image(output_bytes, img_data, img_filename)
+    output_bytes = _append_company_bank_image(output_bytes, company_name)
 
     output_filename = _rename_for_uspace_output(original_filename, company_name)
 
