@@ -397,6 +397,17 @@ h1 { font-size: 20px; color: #1a2332; margin-bottom: 20px; }
                 <input type="text" name="deposit" placeholder="例：0">
             </div>
 
+            <!-- 水電費負擔方（共用） -->
+            <div class="f span2">
+                <label>水電費負擔方 <span class="req">*</span></label>
+                <div class="ic-group" id="utility-group">
+                    <div class="ic-row">
+                        <label class="ic-opt"><input type="radio" name="utility_payer" value="a"> 由甲方負擔</label>
+                        <label class="ic-opt"><input type="radio" name="utility_payer" value="b"> 由乙方負擔</label>
+                    </div>
+                </div>
+            </div>
+
             <!-- 所得代號（共用） -->
             <div class="f span2">
                 <label>所得代號 <span class="req">*</span></label>
@@ -538,6 +549,13 @@ function validateForm() {
         var ig = document.getElementById('ic-group');
         if (ig) ig.classList.add('field-error');
         errors.push('所得代號');
+    }
+
+    var utilChecked = document.querySelector('#tab-generate input[name="utility_payer"]:checked');
+    if (!utilChecked) {
+        var ug = document.getElementById('utility-group');
+        if (ug) ug.classList.add('field-error');
+        errors.push('水電費負擔方');
     }
 
     if (mode === 'a') {

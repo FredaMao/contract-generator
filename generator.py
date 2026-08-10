@@ -354,6 +354,11 @@ def generate_contract(company_key: str, mode: str, form_data: dict) -> tuple[byt
     ctx['bp_owner_check']  = '■' if blueprint == 'owner' else '□'
     ctx['bp_uspace_check'] = '■' if blueprint == 'uspace' else '□'
 
+    # 水電費負擔方 checkboxes（8.6 水電費條款修正新增）
+    utility_payer = form_data.get('utility_payer', '').strip()
+    ctx['util_party_a_check'] = '■' if utility_payer == 'a' else '□'
+    ctx['util_party_b_check'] = '■' if utility_payer == 'b' else '□'
+
     # 分潤稅別（模式B、模式C超額部分適用；固定金額/保底金額恆為含稅，不受此影響）
     tax_type = form_data.get('tax_type', '').strip() or '未稅'
     ctx['tax_type'] = tax_type

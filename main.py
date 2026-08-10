@@ -103,6 +103,7 @@ async def generate(
     sales: str = Form(''),
     blueprint: str = Form(''),
     deposit: str = Form(''),
+    utility_payer: str = Form(''),
 ):
     form_data = {
         'building_id': building_id, 'building_name': building_name,
@@ -119,6 +120,7 @@ async def generate(
         'excess_party_a_percent': excess_party_a_percent,
         'excess_party_b_percent': excess_party_b_percent,
         'sales': sales, 'blueprint': blueprint, 'deposit': deposit,
+        'utility_payer': utility_payer,
     }
     try:
         output_bytes, filename = generate_contract(company, mode, form_data)
