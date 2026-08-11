@@ -245,6 +245,33 @@ def _keep_signature_with_date(xml: str) -> str:
     return xml
 
 
+_ATTACHMENT_TITLE_PAT = re.compile(r'附件.{0,4}身分證')
+
+
+def _page_break_before_attachment(xml: str) -> str:
+    """Force the '附件、身分證正反面及存摺影本' title onto its own page,
+    separate from the signature block above it. Without this, once the
+    signature block's trailing blank lines are trimmed short enough, Word
+    has room to keep flowing and the attachment title lands on the same
+    page as the signature/date lines."""
+    paragraphs = list_paragraphs(xml)
+    for ps, pe, text in paragraphs:
+        if _ATTACHMENT_TITLE_PAT.search(text):
+            para_xml = xml[ps:pe]
+            if '<w:pageBreakBefore' in para_xml:
+                break
+            ppr_m = re.search(r'<w:pPr\b[^>]*>', para_xml)
+            if ppr_m:
+                new_para = para_xml[:ppr_m.end()] + '<w:pageBreakBefore/>' + para_xml[ppr_m.end():]
+            else:
+                p_m = re.search(r'<w:p\b[^>]*>', para_xml)
+                new_para = (para_xml[:p_m.end()] + '<w:pPr><w:pageBreakBefore/></w:pPr>'
+                            + para_xml[p_m.end():])
+            xml = xml[:ps] + new_para + xml[pe:]
+            break
+    return xml
+
+
 def _fix_paragraph_ids(xml: str) -> str:
     """Assign unique w14:paraId and w14:textId values to avoid Word 'unreadable content' warning.
 
@@ -301,6 +328,7 @@ def _post_process_docx(docx_bytes: bytes, sign_date: str = '') -> bytes:
                     doc_xml = _align_party_suffixes(doc_xml)
                     doc_xml = _apply_date_format(doc_xml, sign_date)
                     doc_xml = _keep_signature_with_date(doc_xml)
+                    doc_xml = _page_break_before_attachment(doc_xml)
                     data = doc_xml.encode('utf-8')
                 elif item.filename.startswith('word/') and item.filename.endswith('.xml'):
                     xml_str = data.decode('utf-8')
